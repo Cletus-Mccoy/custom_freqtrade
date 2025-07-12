@@ -1,7 +1,7 @@
 services:
     freqtrade:
       image: freqtradeorg/freqtrade:stable_freqaitorch
-      restart: unless-stopped
+      restart: always
       container_name: freqtrade
       deploy:
         resources:
@@ -11,8 +11,8 @@ services:
                 count: 1
                 capabilities: [gpu]
       volumes:
-        - ./freqtrade/user_data/config_freqai.example.json:/freqtrade/user_data/config.json
-        - ./freqtrade/user_data/strategies/FreQaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
+        - ./user_data/config_freqai.example.json:/freqtrade/user_data/config.json
+        - ./user_data/strategies/FreqaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
       command: >
         trade
         --config /freqtrade/user_data/config.json
@@ -21,6 +21,14 @@ services:
         --strategy-path /freqtrade/user_data/strategies
       ports:
         - "0.0.0.0:8080:8080"
+      networks:
+        - freqnet
+  
+networks:
+  freqnet:
+    driver: bridge
+
+        
 
     # tensorboard:
     #     image: freqtradeorg/freqtrade:stable_freqaitorch

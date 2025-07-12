@@ -1,0 +1,116 @@
+{
+    "$schema": "https://schema.freqtrade.io/schema.json",
+    "trading_mode": "futures",
+    "margin_mode": "isolated",
+    "max_open_trades": 5,
+    "stake_currency": "USDT",
+    "stake_amount": 200,
+    "tradable_balance_ratio": 1,
+    "fiat_display_currency": "USD",
+    "dry_run": true,
+    "timeframe": "3m",
+    "dry_run_wallet": 1000,
+    "cancel_open_orders_on_exit": true,
+    "unfilledtimeout": {
+        "entry": 10,
+        "exit": 30
+    },
+    "exchange": {
+        "name": "binance",
+        "key": "fMYTamnFFXTUpUdYhpQQ4mgEWiYiUIUjuN2ZB5NLxydan9LOIsppNKRp8qSVk9Wh",
+        "secret": "TdTxlHjFZWQlDtstIk8Ny5cVl1aJz7nj1qLV9IXtLHFXCgCoTy3bGIIpMNgxcGpC",
+        "ccxt_config": {},
+        "ccxt_async_config": {},
+        "pair_whitelist": [
+            "BTC/USDT:USDT",
+            "ETH/USDT:USDT",
+            "LTC/USDT:USDT",
+            "LINK/USDT:USDT"
+        ],
+        "pair_blacklist": []
+    },
+    "entry_pricing": {
+        "price_side": "same",
+        "use_order_book": true,
+        "order_book_top": 1,
+        "price_last_balance": 0.0,
+        "check_depth_of_market": {
+            "enabled": false,
+            "bids_to_ask_delta": 1
+        }
+    },
+    "exit_pricing": {
+        "price_side": "other",
+        "use_order_book": true,
+        "order_book_top": 1
+    },
+    "pairlists": [
+        {
+            "method": "StaticPairList"
+        }
+    ],
+    "freqai": {
+        "enabled": true,
+        "purge_old_models": 2,
+        "train_period_days": 7,
+        "backtest_period_days": 3,
+        "live_retrain_hours": 1,
+        "identifier": "unique-id",
+        "feature_parameters": {
+            "include_timeframes": [
+                "3m",
+                "15m",
+                "1h"
+            ],
+            "include_corr_pairlist": [
+                "BTC/USDT",
+                "ETH/USDT",
+                "LTC/USDT",
+                "LINK/USDT"
+            ],
+            "label_period_candles": 20,
+            "include_shifted_candles": 2,
+            "DI_threshold": 0.9,
+            "weight_factor": 0.9,
+            "principal_component_analysis": false,
+            "use_SVM_to_remove_outliers": true,
+            "indicator_periods_candles": [
+                10,
+                20
+            ],
+            "plot_feature_importances": 0,
+            "shuffle_after_split": false,
+            "buffer_train_data_candles": 0
+        },
+        "data_split_parameters": {
+            "test_size": 0.33,
+            "random_state": 1,
+            "shuffle": false
+        },
+        "model_training_parameters": {},
+        "model": "LightGBMRegressor",
+        "write_metrics_to_disk": false,
+        "conv_width": 1,
+        "expiration_hours": 0,
+        "save_backtest_models": false
+    },
+    "bot_name": "test_bot",
+    "force_entry_enable": true,
+    "initial_state": "running",
+    "internals": {
+        "process_throttle_secs": 30
+    },
+    "strategy": "FreqaiExampleStrategy",
+    "db_url": "sqlite:////freqtrade/user_data/tradesv3.sqlite",
+    "api_server": {
+            "enabled": true,
+            "listen_ip_address": "0.0.0.0",
+            "listen_port": 8080,
+            "verbosity": "info",
+            "enable_openapi": true,
+            "username": "freq",
+            "password": "abcdef",
+            "jwt_secret_key": "wegew4g6e4g6f84afaf1dqw51d6qw1f6",
+            "ws_token": "VYgmmHtGEkcGLtuLJ3onmkk7wB4ef0-_5g"
+        }
+}
