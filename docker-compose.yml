@@ -10,17 +10,17 @@ services:
               - driver: nvidia
                 count: 1
                 capabilities: [gpu]
-        volumes:
-          - ./freqtrade/user_data/config_freqai.example.json:/freqtrade/user_data/config.json
-          - ./freqtrade/user_data/strategies/FreQaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
-        command: >
-          trade
-          --config /freqtrade/user_data/config.json
-          --strategy FreqaiExampleStrategy
-          --freqaimodel LightGBMRegressor
-          --strategy-path /freqtrade/user_data/strategies
-        ports:
-          - "0.0.0.0:8080:8080"
+      volumes:
+        - ./freqtrade/user_data/config_freqai.example.json:/freqtrade/user_data/config.json
+        - ./freqtrade/user_data/strategies/FreQaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
+      command: >
+        trade
+        --config /freqtrade/user_data/config.json
+        --strategy FreqaiExampleStrategy
+        --freqaimodel LightGBMRegressor
+        --strategy-path /freqtrade/user_data/strategies
+      ports:
+        - "0.0.0.0:8080:8080"
 
     # tensorboard:
     #     image: freqtradeorg/freqtrade:stable_freqaitorch
