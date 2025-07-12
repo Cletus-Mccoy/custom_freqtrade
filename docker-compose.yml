@@ -1,90 +1,8 @@
 services:
-  agent-zero:
-    image: docker.io/frdel/agent-zero-run:latest
-    container_name: agent-zero
-    volumes:
-      - AgentZeroInstances:/a0
-      - ${LOCAL_AGENT_DIR}/agent:/root
-      - ./agent-zero/a0/tmp/settings.json:/a0/tmp/settings.json
-      - ./agent-zero/a0/python/tools/knowledge_tool.py:/a0/python/tools/knowledge_tool.py
-      - ./agent-zero/a0/python/helpers/perplexica.py:/a0/python/helpers/perplexica.py
-      - ./agent-zero/a0/knowledge/default/main/about:/a0/knowledge/default/main/about
-      - ./agent-zero/a0/instruments/custom:/a0/instruments/custom
-      - ./agent-zero/searxng/limiter.toml:/etc/searxng/limiter.toml
-      - ./agent-zero/searxng/settings.yml:/etc/searxng/settings.yml
-      - ./agent-zero/searxng/uwsgi.ini:/etc/searxng/uwsgi.ini
-    ports:
-      - "50001:80"
-    networks:
-      - agent-network
-    env_file:
-      - ./agent-zero/.env
-  #   depends_on:
-  #     - ollama
-
-  # ollama:
-  #   build:
-  #     context: ./ollama
-  #     dockerfile: Dockerfile
-  #   container_name: ollama
-  #   volumes:
-  #     - OllamaModels:/root/.ollama/
-  #   networks:
-  #     - agent-network
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             count: 1
-  #             capabilities: ["gpu"]
-  #   env_file:
-  #     - ./ollama/.env
-
-  perplexica-backend:
-    container_name: perplexica-backend
-    image: itzcrazykns1337/perplexica:main
-    # build:
-    #   context: .
-    #   dockerfile: ./perplexica/app.dockerfile
-    environment:
-      - DATA_DIR=/home/perplexica 
-    networks:
-      - agent-network
-    volumes:
-      - Perplexica-DBstore:/home/perplexica/data
-      - ./perplexica/config.toml:/home/perplexica/config.toml
-    restart: unless-stopped
-
-  freqtrade:
+    freqtrade:
     image: freqtradeorg/freqtrade:stable_freqaitorch
     restart: unless-stopped
     container_name: freqtrade
-    volumes:
-      - ./freqtrade/user_data/config_freqai.example.json:/freqtrade/user_data/config.json
-      - ./freqtrade/user_data/strategies/FreQaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
-    networks:
-      - agent-network
-    command: >
-      trade
-      --config /freqtrade/user_data/config.json
-      --strategy FreqaiExampleStrategy
-      --freqaimodel LightGBMRegressor
-      --strategy-path /freqtrade/user_data/strategies
-    ports:
-      - "127.0.0.1:8080:8080"
-
-  freqtrade1:
-    image: freqtradeorg/freqtrade:stable_freqaitorch
-    restart: unless-stopped
-    container_name: freqtrade1
-    volumes:
-      - ./freqtrade/ichiv1/user_data/:/freqtrade/user_data/
-    networks:
-      - agent-network
-    build:
-      context: .
-      dockerfile: "./freqtrade/ichiv1/Dockerfile.custom"
     deploy:
       resources:
         reservations:
@@ -92,60 +10,51 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    command: >
-      trade
-      --logfile /freqtrade/user_data/logs/freqtrade.log
-      --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-      --config /freqtrade/user_data/config_freqai.json
-      --strategy-path /freqtrade/user_data/strategies
-      --strategy ichiv1
-
-    ports:
-      - "127.0.0.1:8081:8080"
-
-  tensorboard:
-      image: freqtradeorg/freqtrade:stable_freqaitorch
-      container_name: tensorboard
       volumes:
-        - ./freqtrade/ichiv1/user_data:/freqtrade/user_data
-      #network_mode: "host"
-      ports:
-        - "9060:9060"
-      # Default command used when running `docker compose up` --bind_all
-      entrypoint: tensorboard
+        - ./freqtrade/user_data/config_freqai.example.json:/freqtrade/user_data/config.json
+        - ./freqtrade/user_data/strategies/FreQaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
       command: >
-        --bind_all
-        --port 9060
-        --logdir /freqtrade/user_data/models
-  plot:
-    image: freqtradeorg/freqtrade:stable_plot
-    container_name: freqtrade_plot
-    volumes:
-      - ./freqtrade/ichiv1/user_data:/freqtrade/user_data
-    # Expose api on port 8080 (localhost only)
-    # Please read the https://www.freqtrade.io/en/stable/rest-api/ documentation
-    # before enabling this.
-    ports:
-      - "127.0.0.1:8082:8080"
-    # Default command used when running `docker compose up`
-    command: >
-      trade
-      --logfile /freqtrade/user_data/logs/freqtrade.log
-      --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-      --config /freqtrade/user_data/config_freqai.json
-      --strategy-path /freqtrade/user_data/strategies
-      --strategy ichiv1
+        trade
+        --config /freqtrade/user_data/config.json
+        --strategy FreqaiExampleStrategy
+        --freqaimodel LightGBMRegressor
+        --strategy-path /freqtrade/user_data/strategies
+      ports:
+        - "0.0.0.0:8080:8080"
 
-volumes:
-  AgentZeroInstances:
-    driver: local
-  OllamaModels:
-    driver: local
-  Perplexica-DBstore:
+    # tensorboard:
+    #     image: freqtradeorg/freqtrade:stable_freqaitorch
+    #     container_name: tensorboard
+    #     volumes:
+    #       - ./freqtrade/ichiv1/user_data:/freqtrade/user_data
+    #     #network_mode: "host"
+    #     ports:
+    #       - "9060:9060"
+    #     # Default command used when running `docker compose up` --bind_all
+    #     entrypoint: tensorboard
+    #     command: >
+    #       --bind_all
+    #       --port 9060
+    #       --logdir /freqtrade/user_data/models
 
-networks:
-  agent-network:
-    driver: bridge
+    # plot:
+    #   image: freqtradeorg/freqtrade:stable_plot
+    #   container_name: freqtrade_plot
+    #   volumes:
+    #     - ./freqtrade/ichiv1/user_data:/freqtrade/user_data
+    #   # Expose api on port 8080 (localhost only)
+    #   # Please read the https://www.freqtrade.io/en/stable/rest-api/ documentation
+    #   # before enabling this.
+    #   ports:
+    #     - "127.0.0.1:8082:8080"
+    #   # Default command used when running `docker compose up`
+    #   command: >
+    #     trade
+    #     --logfile /freqtrade/user_data/logs/freqtrade.log
+    #     --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+    #     --config /freqtrade/user_data/config_freqai.json
+    #     --strategy-path /freqtrade/user_data/strategies
+    #     --strategy ichiv1
 
 
 
