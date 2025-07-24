@@ -1,0 +1,40 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+	"name": "freqai-devcontainer",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"dockerComposeFile": "docker-compose.yml",
+    "service": "devcontainer",
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "pip3 install --user -r requirements.txt",>
+
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+			// Add the IDs of extensions you want to install here.
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance"
+				// "ms-toolsai.jupyter",
+				// "ms-toolsai.jupyter-keymap",
+				// "ms-toolsai.jupyter-renderers",
+				// "ms-toolsai.jupyter-cell-tags"
+			]
+			// Uncomment to set a specific Python interpreter path.
+			// "python.defaultInterpreterPath": "/usr/local/bin/python3"
+
+		}
+
+	}
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+}

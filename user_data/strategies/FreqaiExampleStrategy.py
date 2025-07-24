@@ -41,8 +41,8 @@ class FreqaiExampleStrategy(IStrategy):
     stoploss = -0.05
     use_exit_signal = True
     # this is the maximum period fed to talib (timeframe independent)
-    startup_candle_count: int = 40
-    can_short = True
+    startup_candle_count: int = 136
+    can_short = False
 
     def feature_engineering_expand_all(
         self, dataframe: DataFrame, period: int, metadata: dict, **kwargs
@@ -99,6 +99,7 @@ class FreqaiExampleStrategy(IStrategy):
             dataframe["volume"] / dataframe["volume"].rolling(period).mean()
         )
 
+        dataframe = dataframe.bfill().ffill()
         return dataframe
 
     def feature_engineering_expand_basic(
@@ -137,6 +138,8 @@ class FreqaiExampleStrategy(IStrategy):
         dataframe["%-pct-change"] = dataframe["close"].pct_change()
         dataframe["%-raw_volume"] = dataframe["volume"]
         dataframe["%-raw_price"] = dataframe["close"]
+    
+        dataframe = dataframe.bfill().ffill()
         return dataframe
 
     def feature_engineering_standard(
@@ -169,6 +172,7 @@ class FreqaiExampleStrategy(IStrategy):
         """
         dataframe["%-day_of_week"] = dataframe["date"].dt.dayofweek
         dataframe["%-hour_of_day"] = dataframe["date"].dt.hour
+        dataframe = dataframe.bfill().ffill()
         return dataframe
 
     def set_freqai_targets(self, dataframe: DataFrame, metadata: dict, **kwargs) -> DataFrame:
@@ -220,6 +224,7 @@ class FreqaiExampleStrategy(IStrategy):
         #     .min()
         # )
 
+        dataframe = dataframe.bfill().ffill()
         return dataframe
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -235,36 +240,36 @@ class FreqaiExampleStrategy(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
+        logger.info(f"{metadata['pair']} - s_close: {df['&-s_close'].iloc[-1]:.4f}, do_predict: {df['do_predict'].iloc[-1]}, close: {df['close'].iloc[-1]}")
+        
         enter_long_conditions = [
             df["do_predict"] == 1,
-            df["&-s_close"] > 0.01,
+            df["&-s_close"] > 0.001,
         ]
 
-        if enter_long_conditions:
+        long_condition_met = reduce(lambda x, y: x & y, enter_long_conditions)                  
+
+        if long_condition_met.any():
+            logger.info(f"{metadata['pair']} - Triggering LONG entry")
             df.loc[
                 reduce(lambda x, y: x & y, enter_long_conditions), ["enter_long", "enter_tag"]
             ] = (1, "long")
 
-        enter_short_conditions = [
-            df["do_predict"] == 1,
-            df["&-s_close"] < -0.01,
-        ]
-
-        if enter_short_conditions:
-            df.loc[
-                reduce(lambda x, y: x & y, enter_short_conditions), ["enter_short", "enter_tag"]
-            ] = (1, "short")
-
         return df
 
     def populate_exit_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
-        exit_long_conditions = [df["do_predict"] == 1, df["&-s_close"] < 0]
-        if exit_long_conditions:
-            df.loc[reduce(lambda x, y: x & y, exit_long_conditions), "exit_long"] = 1
+        logger.info(f"{metadata['pair']} - s_close: {df['&-s_close'].iloc[-1]:.4f}, do_predict: {df['do_predict'].iloc[-1]}, close: {df['close'].iloc[-1]}")
+        
+        exit_long_conditions = [
+            df["do_predict"] == 1,
+            df["&-s_close"] < 0
+        ]
 
-        exit_short_conditions = [df["do_predict"] == 1, df["&-s_close"] > 0]
-        if exit_short_conditions:
-            df.loc[reduce(lambda x, y: x & y, exit_short_conditions), "exit_short"] = 1
+        long_condition_met = reduce(lambda x, y: x & y, exit_long_conditions)
+
+        if long_condition_met.any():
+            logger.info(f"{metadata['pair']} - Triggering LONG exit")
+            df.loc[long_condition_met, "exit_long"] = 1
 
         return df
 
@@ -284,10 +289,10 @@ class FreqaiExampleStrategy(IStrategy):
         last_candle = df.iloc[-1].squeeze()
 
         if side == "long":
-            if rate > (last_candle["close"] * (1 + 0.0025)):
+            if rate > (last_candle["close"] * (1 + 0.01)): # Adjusted from 0.00025
                 return False
         else:
-            if rate < (last_candle["close"] * (1 - 0.0025)):
+            if rate < (last_candle["close"] * (1 - 0.01)): # Adjusted from 0.00025
                 return False
 
         return True
