@@ -60,7 +60,7 @@
         "purge_old_models": 2,
         "train_period_days": 14,
         "backtest_period_days": 5,
-        "live_retrain_hours": 12,
+        "live_retrain_hours": 1,
         "identifier": "unique-id-v2",
         "feature_parameters": {
             "include_timeframes": [
@@ -115,7 +115,7 @@
         "save_backtest_models": false,
         "fit_live_predictions_candles": 200
     },
-    "bot_name": "test_bot",
+    "bot_name": "CatboostRegressor",
     "force_entry_enable": true,
     "initial_state": "running",
     "internals": {

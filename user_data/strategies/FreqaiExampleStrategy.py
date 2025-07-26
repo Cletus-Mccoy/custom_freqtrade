@@ -247,13 +247,12 @@ class FreqaiExampleStrategy(IStrategy):
             df["&-s_close"] > 0.001,
         ]
 
-        long_condition_met = reduce(lambda x, y: x & y, enter_long_conditions)                  
+        entry_condition_met = reduce(lambda x, y: x & y, enter_long_conditions)                  
 
-        if long_condition_met.any():
+        if entry_condition_met.any():
             logger.info(f"{metadata['pair']} - Triggering LONG entry")
-            df.loc[
-                reduce(lambda x, y: x & y, enter_long_conditions), ["enter_long", "enter_tag"]
-            ] = (1, "long")
+            df.loc[entry_condition_met, "enter_long"] = 1
+            df.loc[entry_condition_met, "enter_tag"] = "long"
 
         return df
 
@@ -265,11 +264,12 @@ class FreqaiExampleStrategy(IStrategy):
             df["&-s_close"] < 0
         ]
 
-        long_condition_met = reduce(lambda x, y: x & y, exit_long_conditions)
+        exit_condition_met = reduce(lambda x, y: x & y, exit_long_conditions)
 
-        if long_condition_met.any():
+        if exit_condition_met.any():
             logger.info(f"{metadata['pair']} - Triggering LONG exit")
-            df.loc[long_condition_met, "exit_long"] = 1
+            df.loc[exit_condition_met, "exit_long"] = 1
+            df.loc[exit_condition_met, "exit_tag"] = "long"
 
         return df
 

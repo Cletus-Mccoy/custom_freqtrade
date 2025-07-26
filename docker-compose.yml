@@ -1,8 +1,8 @@
 services:
-    freqtrade:
-      image: freqtradeorg/freqtrade:stable_freqaitorch
+    freqtrade_OG_LightGBM:
+      image: freqtradeorg/freqtrade:stable_freqai
       restart: always
-      container_name: freqtrade
+      container_name: freqtrade_OG_LightGBM
       deploy:
         resources:
           reservations:
@@ -11,24 +11,112 @@ services:
                 count: 1
                 capabilities: [gpu]
       volumes:
-        - ./user_data/config_freqai.example.json:/freqtrade/user_data/config.json
+        - userdata_OG_LightGBM:/freqtrade/user_data
+        - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json
         - ./user_data/strategies/FreqaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
       command: >
         trade
         --config /freqtrade/user_data/config.json
         --strategy FreqaiExampleStrategy
-        --freqaimodel CatboostRegressor
+        --freqaimodel LightGBMRegressor
         --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
         --strategy-path /freqtrade/user_data/strategies
       ports:
         - "0.0.0.0:8080:8080"
       networks:
         - freqnet
-  
+
+    # freqtrade_OG_Catboost:
+    #   image: freqtradeorg/freqtrade:stable_freqaitorch
+    #   restart: always
+    #   container_name: freqtrade_OG_Catboost
+    #   deploy:
+    #     resources:
+    #       reservations:
+    #         devices:
+    #           - driver: nvidia
+    #             count: 1
+    #             capabilities: [gpu]
+    #   volumes:
+    #     - userdata_OG_Catboost:/freqtrade/user_data
+    #     - ./user_data/config_freqai.Catboost.json:/freqtrade/user_data/config.json
+    #     - ./user_data/strategies/FreqaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
+    #   command: >
+    #     trade
+    #     --config /freqtrade/user_data/config.json
+    #     --strategy FreqaiExampleStrategy
+    #     --freqaimodel CatboostRegressor
+    #     --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+    #     --strategy-path /freqtrade/user_data/strategies
+    #   ports:
+    #     - "0.0.0.0:8081:8080"
+    #   networks:
+    #     - freqnet
+
+    # freqtrade_filterEMA:
+    #   image: freqtradeorg/freqtrade:stable_freqaitorch
+    #   restart: always
+    #   container_name: freqtrade_filterEMA
+    #   deploy:
+    #     resources:
+    #       reservations:
+    #         devices:
+    #           - driver: nvidia
+    #             count: 1
+    #             capabilities: [gpu]
+    #   volumes:
+    #     - userdata_filterEMA:/freqtrade/user_data
+    #     - ./user_data/config_freqai.FilterEMA.json:/freqtrade/user_data/config.json
+    #     - ./user_data/strategies/FreqaiExampleStrategy_FilterEMA.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_FilterEMA.py
+    #   command: >
+    #     trade
+    #     --config /freqtrade/user_data/config.json
+    #     --strategy FreqaiExampleStrategy_FilterEMA
+    #     --freqaimodel LightGBMRegressor
+    #     --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+    #     --strategy-path /freqtrade/user_data/strategies
+    #   ports:
+    #     - "0.0.0.0:8082:8080"
+    #   networks:
+    #     - freqnet
+
+    # freqtrade_Classification:
+    #     image: freqtradeorg/freqtrade:stable_freqaitorch
+    #     restart: always
+    #     container_name: freqtrade_Classification
+    #     deploy:
+    #       resources:
+    #         reservations:
+    #           devices:
+    #             - driver: nvidia
+    #               count: 1
+    #               capabilities: [gpu]
+    #     volumes:
+    #       - userdata_classification:/freqtrade/user_data
+    #       - ./user_data/config_freqai.Classification.json:/freqtrade/user_data/config.json
+    #       - ./user_data/strategies/FreqaiExampleStrategy_Classification.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_Classification.py
+
+    #     command: >
+    #       trade
+    #       --config /freqtrade/user_data/config.json
+    #       --strategy FreqaiExampleStrategy_Classification
+    #       --freqaimodel CatboostClassifier
+    #       --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+    #       --strategy-path /freqtrade/user_data/strategies
+    #     ports:
+    #       - "0.0.0.0:8083:8080"
+    #     networks:
+    #       - freqnet
+
 networks:
   freqnet:
     driver: bridge
 
+volumes:
+  userdata_OG_LightGBM:
+  userdata_OG_Catboost:
+  userdata_filterEMA:
+  userdata_classification:
         
 
     # tensorboard:
