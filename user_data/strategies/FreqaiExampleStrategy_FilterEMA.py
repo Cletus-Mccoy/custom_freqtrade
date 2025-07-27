@@ -66,6 +66,8 @@ class FreqaiExampleStrategy_FilterEMA(IStrategy):
         return self.freqai.start(dataframe, metadata, self)
 
     def populate_entry_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
+        logger.info(f"{metadata['pair']} - s_close: {df['&-s_close'].iloc[-1]:.4f}, do_predict: {df['do_predict'].iloc[-1]}, close: {df['close'].iloc[-1]}")
+
         df["enter_long"] = 0
         df["enter_tag"] = ""
 
@@ -76,14 +78,18 @@ class FreqaiExampleStrategy_FilterEMA(IStrategy):
             df["volume"] > df["volume"].rolling(20).mean(),  # Boven gemiddeld volume
         ]
 
-        entry_signal = reduce(lambda x, y: x & y, entry_conditions)
+        entry_condition_met = reduce(lambda x, y: x & y, entry_conditions)
 
-        df.loc[entry_signal, "enter_long"] = 1
-        df.loc[entry_signal, "enter_tag"] = "freqai_entry"
+        if entry_condition_met.any():
+            logger.info(f"{metadata['pair']} - Triggering LONG entry")
+            df.loc[entry_condition_met, "enter_long"] = 1
+            df.loc[entry_condition_met, "enter_tag"] = "freqai_entry"
 
         return df
 
     def populate_exit_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
+        logger.info(f"{metadata['pair']} - s_close: {df['&-s_close'].iloc[-1]:.4f}, do_predict: {df['do_predict'].iloc[-1]}, close: {df['close'].iloc[-1]}")
+
         df["exit_long"] = 0
         df["exit_tag"] = ""
 
@@ -91,10 +97,12 @@ class FreqaiExampleStrategy_FilterEMA(IStrategy):
             df["do_predict"] == 1,
             df["&-s_close"] < -0.002,  # Negatief vooruitzicht
         ]
+        exit_condition_met = reduce(lambda x, y: x & y, exit_conditions)
 
-        exit_signal = reduce(lambda x, y: x & y, exit_conditions)
-        df.loc[exit_signal, "exit_long"] = 1
-        df.loc[exit_signal, "exit_tag"] = "freqai_exit"
+        if exit_condition_met.any():
+            logger.info(f"{metadata['pair']} - Triggering LONG exit")
+            df.loc[exit_condition_met, "exit_long"] = 1
+            df.loc[exit_condition_met, "exit_tag"] = "freqai_exit"
 
         return df
 

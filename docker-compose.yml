@@ -3,6 +3,10 @@ services:
       image: freqtradeorg/freqtrade:stable_freqai
       restart: always
       container_name: freqtrade_OG_LightGBM
+      runtime: nvidia
+      environment:
+        - NVIDIA_VISIBLE_DEVICES=all
+        - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       deploy:
         resources:
           reservations:
@@ -23,6 +27,37 @@ services:
         --strategy-path /freqtrade/user_data/strategies
       ports:
         - "0.0.0.0:8080:8080"
+      networks:
+        - freqnet
+
+    freqtrade_OG_LightGBM_Inverted:
+      image: freqtradeorg/freqtrade:stable_freqai
+      restart: always
+      container_name: freqtrade_OG_LightGBM_Inverted
+      runtime: nvidia
+      environment:
+        - NVIDIA_VISIBLE_DEVICES=all
+        - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: 1
+                capabilities: [gpu]
+      volumes:
+        - userdata_OG_LightGBM_Inverted:/freqtrade/user_data
+        - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json
+        - ./user_data/strategies/FreqaiExampleStrategy_Inverted.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
+      command: >
+        trade
+        --config /freqtrade/user_data/config.json
+        --strategy FreqaiExampleStrategy
+        --freqaimodel LightGBMRegressor
+        --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+        --strategy-path /freqtrade/user_data/strategies
+      ports:
+        - "0.0.0.0:8081:8080"
       networks:
         - freqnet
 
@@ -114,6 +149,7 @@ networks:
 
 volumes:
   userdata_OG_LightGBM:
+  userdata_OG_LightGBM_Inverted:
   userdata_OG_Catboost:
   userdata_filterEMA:
   userdata_classification:

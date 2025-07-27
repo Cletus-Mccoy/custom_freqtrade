@@ -103,10 +103,14 @@
         "model_training_parameters": {
             "n_estimators": 1000,
             "learning_rate": 0.1,
-            "depth": 6,
-            "l2_leaf_reg": 3,
-            "bootstrap_type": "Bernoulli",
-            "subsample": 0.8
+            "num_leaves": 31,
+            "max_depth": -1,
+            "min_child_samples": 20,
+            "min_child_weight": 0.001,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.0,
+            "reg_lambda": 1.0
         },
         "model": "LightGBMRegressor",
         "write_metrics_to_disk": true,
