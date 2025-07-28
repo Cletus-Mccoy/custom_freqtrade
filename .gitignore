@@ -1,1 +1,93 @@
-/user_data/models
+# FreqTrade specific
+/user_data/models/
+/user_data/data/
+/user_data/logs/
+/user_data/notebooks/
+/user_data/backtest_results/
+/user_data/hyperopt_results/
+/user_data/plot/
+tradesv3.sqlite*
+*.db
+*.sqlite
+
+# API Keys and Secrets
+config*.json
+!config_example.json
+.env
+secrets.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# FreqAI specific
+/user_data/models/*
+!/user_data/models/.gitkeep
+/user_data/data/*
+!/user_data/data/.gitkeep
+
+# Hyperopt results
+hyperopt_results.pickle
+hyperopt_results.json
+
+# Backtest results
+backtest-result-*.json
