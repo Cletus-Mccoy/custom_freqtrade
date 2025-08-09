@@ -3,6 +3,7 @@
 // Global variables
 let currentTheme = 'light';
 let notificationCount = 0;
+let activeNotifications = [];
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
@@ -198,12 +199,20 @@ function initializeNotifications() {
 function showNotification(message, type = 'info', duration = 5000) {
     const notification = document.createElement('div');
     notification.className = `notification alert alert-${type} alert-dismissible fade show position-fixed`;
+    
+    // Calculate vertical position for stacking
+    const stackOffset = activeNotifications.length * 80; // 80px spacing between notifications
+    
     notification.style.cssText = `
-        top: 20px;
+        top: ${20 + stackOffset}px;
         right: 20px;
         z-index: 9999;
         min-width: 300px;
         max-width: 400px;
+        background-color: white;
+        border-left: 4px solid var(--bs-${type});
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 0.375rem;
     `;
     
     const icon = getNotificationIcon(type);
@@ -212,24 +221,48 @@ function showNotification(message, type = 'info', duration = 5000) {
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
     
+    // Add to active notifications array
+    activeNotifications.push(notification);
+    
     document.body.appendChild(notification);
     
     // Auto-remove after duration
     setTimeout(() => {
-        if (notification.parentNode) {
-            notification.classList.remove('show');
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.remove();
-                }
-            }, 150);
-        }
+        removeNotification(notification);
     }, duration);
     
     // Browser notification for important messages
     if (type === 'danger' || type === 'warning') {
         showBrowserNotification(message, type);
     }
+}
+
+function removeNotification(notification) {
+    if (notification.parentNode) {
+        notification.classList.remove('show');
+        
+        // Remove from active notifications array
+        const index = activeNotifications.indexOf(notification);
+        if (index > -1) {
+            activeNotifications.splice(index, 1);
+        }
+        
+        // Reposition remaining notifications
+        repositionNotifications();
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 150);
+    }
+}
+
+function repositionNotifications() {
+    activeNotifications.forEach((notification, index) => {
+        const stackOffset = index * 80;
+        notification.style.top = `${20 + stackOffset}px`;
+    });
 }
 
 function getNotificationIcon(type) {
@@ -252,6 +285,23 @@ function showBrowserNotification(message, type) {
             tag: 'freqtrade-notification'
         });
     }
+}
+
+// Notification alias functions for compatibility
+function showSuccess(message, duration = 5000) {
+    showNotification(message, 'success', duration);
+}
+
+function showError(message, duration = 8000) {
+    showNotification(message, 'danger', duration);
+}
+
+function showInfo(message, duration = 5000) {
+    showNotification(message, 'info', duration);
+}
+
+function showWarning(message, duration = 6000) {
+    showNotification(message, 'warning', duration);
 }
 
 // Utility functions

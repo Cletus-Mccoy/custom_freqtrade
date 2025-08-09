@@ -310,6 +310,101 @@ class FreqTradeManager:
             
         return None
 
+    def resolve_docker_path_to_local(self, docker_path, service_config):
+        """Resolve Docker container path to local filesystem path using volume mappings"""
+        try:
+            if not docker_path or 'volumes' not in service_config:
+                return None
+            
+            volumes = service_config['volumes']
+            if not isinstance(volumes, list):
+                return None
+            
+            for volume in volumes:
+                if isinstance(volume, str) and ':' in volume:
+                    # Handle volume format: "local_path:container_path" or "local_path:container_path:options"
+                    parts = volume.split(':')
+                    if len(parts) >= 2:
+                        local_path = parts[0]
+                        container_path = parts[1]
+                        
+                        # Check if docker_path starts with the container path
+                        if docker_path.startswith(container_path):
+                            # Replace container path with local path
+                            relative_path = docker_path[len(container_path):].lstrip('/')
+                            
+                            # Convert to absolute local path
+                            if local_path.startswith('./'):
+                                # Relative to base path
+                                local_base = self.base_path / local_path[2:]
+                            elif local_path.startswith('/'):
+                                # Absolute path
+                                local_base = Path(local_path)
+                            else:
+                                # Relative to base path
+                                local_base = self.base_path / local_path
+                            
+                            if relative_path:
+                                resolved_path = local_base / relative_path
+                            else:
+                                resolved_path = local_base
+                            
+                            return resolved_path
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error resolving Docker path {docker_path}: {e}")
+            return None
+
+    def find_config_file_in_service(self, config_file, service_config):
+        """Find config file using Docker volume mappings from service configuration"""
+        try:
+            # First try to resolve using Docker volume mappings
+            if config_file.startswith('/freqtrade/'):
+                resolved_path = self.resolve_docker_path_to_local(config_file, service_config)
+                if resolved_path and resolved_path.exists():
+                    return resolved_path
+            
+            # Extract just filename if it's a full path
+            if '/' in config_file:
+                config_filename = config_file.split('/')[-1]
+            else:
+                config_filename = config_file
+            
+            # Fallback to original logic
+            return self.find_config_file(config_filename)
+            
+        except Exception as e:
+            print(f"Error finding config file {config_file}: {e}")
+            return None
+
+    def find_strategy_file_in_service(self, strategy_name, service_config):
+        """Find strategy file using Docker volume mappings from service configuration"""
+        try:
+            if not strategy_name or strategy_name == 'Unknown':
+                return None
+            
+            # Try to resolve strategy path using Docker volume mappings
+            strategy_docker_path = f"/freqtrade/user_data/strategies/{strategy_name}.py"
+            resolved_path = self.resolve_docker_path_to_local(strategy_docker_path, service_config)
+            
+            if resolved_path and resolved_path.exists():
+                return resolved_path
+            
+            # Fallback to original logic
+            strategy_file = f"{strategy_name}.py"
+            strategy_path = self.strategies_path / strategy_file
+            
+            if strategy_path.exists():
+                return strategy_path
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error finding strategy file {strategy_name}: {e}")
+            return None
+
     def create_config_from_template(self, template_config, strategy, pairlist, container_name):
         """Create a new config file from template"""
         try:
@@ -687,13 +782,648 @@ class FreqTradeManager:
                             strategy = service_info['command'][i + 1]
                         elif arg == '--config' and i + 1 < len(service_info['command']):
                             config_file = service_info['command'][i + 1]
+                elif isinstance(service_info['command'], str):
+                    command_str = service_info['command']
+                    # Handle shell commands that contain freqtrade
+                    if 'freqtrade' in command_str:
+                        # Extract strategy from --strategy parameter
+                        if '--strategy ' in command_str:
+                            parts = command_str.split('--strategy ')
+                            if len(parts) > 1:
+                                strategy_part = parts[1].split()[0]  # Get first word after --strategy
+                                strategy = strategy_part
+                        
+                        # Extract config from --config parameter
+                        if '--config ' in command_str:
+                            parts = command_str.split('--config ')
+                            if len(parts) > 1:
+                                config_part = parts[1].split()[0]  # Get first word after --config
+                                config_file = config_part.replace('/freqtrade/user_data/', '')
                 
                 service_info['strategy'] = strategy
                 service_info['config_file'] = config_file
                 
+                # Add comprehensive validation checks
+                service_info['port_consistency'] = self.validate_port_consistency(service_name, service_config, config_file)
+                service_info['strategy_validation'] = self.validate_strategy_availability(service_name, service_config, strategy)
+                service_info['config_validation'] = self.validate_config_file(service_name, service_config, config_file)
+                
                 services_dict[service_name] = service_info
         
         return services_dict
+    
+    def validate_port_consistency(self, service_name, service_config, config_file):
+        """Validate that container ports match API server ports in config and check for port conflicts"""
+        try:
+            # Extract container port from service config
+            container_port = 8080  # Default FreqTrade API port
+            host_port = None
+            
+            if 'ports' in service_config and service_config['ports']:
+                ports = service_config['ports']
+                
+                if isinstance(ports, list) and len(ports) > 0:
+                    port_mapping = ports[0]  # Take first port mapping
+                    
+                    if ':' in str(port_mapping):
+                        parts = str(port_mapping).split(':')
+                        
+                        # Handle different port mapping formats:
+                        # Format 1: "8080:8080" (2 parts)
+                        # Format 2: "0.0.0.0:8080:8080" (3 parts)
+                        # Format 3: "127.0.0.1:8080:8080" (3 parts)
+                        if len(parts) == 2:
+                            try:
+                                host_port = int(parts[0])
+                                container_port = int(parts[1])
+                            except ValueError:
+                                container_port = 8080
+                        elif len(parts) == 3:
+                            # Format: "IP:HOST_PORT:CONTAINER_PORT"
+                            try:
+                                host_port = int(parts[1])  # Middle part is the host port
+                                container_port = int(parts[2])  # Last part is the container port
+                            except ValueError:
+                                host_port = None
+                                container_port = 8080
+                        else:
+                            container_port = 8080
+            
+            # Check for port conflicts with other services
+            port_conflicts = self._check_port_conflicts(service_name, host_port)
+            
+            # Try to find and read the config file using Docker volume mappings
+            config_api_port = 8080  # Default
+            config_missing = True
+            
+            if config_file and config_file != 'Unknown':
+                config_path = self.find_config_file_in_service(config_file, service_config)
+                if config_path and config_path.exists():
+                    config_missing = False
+                    try:
+                        with open(config_path, 'r') as f:
+                            config_data = json.load(f)
+                        
+                        # Check API server configuration
+                        if 'api_server' in config_data:
+                            config_api_port = config_data['api_server'].get('listen_port', 8080)
+                    except Exception as e:
+                        print(f"Error reading config {config_file}: {e}")
+            
+            # Determine overall consistency
+            port_match = container_port == config_api_port
+            has_conflicts = len(port_conflicts) > 0
+            
+            # Build result message
+            messages = []
+            if not port_match:
+                messages.append(f'Container port {container_port} != Config port {config_api_port}')
+            if has_conflicts:
+                conflict_services = ', '.join(port_conflicts)
+                messages.append(f'Host port {host_port} conflicts with: {conflict_services}')
+            if config_missing:
+                messages.append('Config file not found')
+            
+            if not messages:
+                messages.append('All checks passed')
+            
+            result = {
+                'success': True,
+                'consistent': port_match and not has_conflicts and not config_missing,
+                'container_port': container_port,
+                'config_port': config_api_port,
+                'host_port': host_port,
+                'port_conflicts': port_conflicts,
+                'config_missing': config_missing,
+                'message': '; '.join(messages)
+            }
+            
+            return result
+            
+        except Exception as e:
+            print(f"ERROR: Exception validating port consistency for {service_name}: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'success': False,
+                'consistent': False,
+                'container_port': 'unknown',
+                'config_port': 'unknown',
+                'host_port': 'unknown',
+                'port_conflicts': [],
+                'config_missing': True,
+                'message': f'Validation error: {e}'
+            }
+    
+    def _check_port_conflicts(self, current_service_name, host_port):
+        """Check if the host port conflicts with other services"""
+        if not host_port:
+            return []
+        
+        conflicts = []
+        try:
+            compose_data = self.load_docker_compose()
+            if compose_data and 'services' in compose_data:
+                for service_name, service_config in compose_data['services'].items():
+                    if service_name == current_service_name:
+                        continue
+                    
+                    if 'ports' in service_config and service_config['ports']:
+                        ports = service_config['ports']
+                        if isinstance(ports, list):
+                            for port_mapping in ports:
+                                if ':' in str(port_mapping):
+                                    parts = str(port_mapping).split(':')
+                                    try:
+                                        other_host_port = None
+                                        if len(parts) == 2:
+                                            # Format: "host_port:container_port"
+                                            other_host_port = int(parts[0])
+                                        elif len(parts) == 3:
+                                            # Format: "ip:host_port:container_port"
+                                            other_host_port = int(parts[1])
+                                        
+                                        if other_host_port and other_host_port == host_port:
+                                            conflicts.append(service_name)
+                                    except (ValueError, IndexError):
+                                        continue
+        except Exception as e:
+            print(f"Error checking port conflicts: {e}")
+        
+        return conflicts
+    
+    def check_strategy_consistency(self, service_name, service_config):
+        """Check for strategy name consistency between command and environment"""
+        try:
+            command_strategy = 'Unknown'
+            env_strategy = 'Unknown'
+            
+            # Extract strategy from command
+            if 'command' in service_config:
+                command = service_config['command']
+                if isinstance(command, list):
+                    for i, arg in enumerate(command):
+                        if arg == '--strategy' and i + 1 < len(command):
+                            command_strategy = command[i + 1]
+                            break
+            
+            # Extract strategy from environment
+            if 'environment' in service_config:
+                env_vars = service_config['environment']
+                if isinstance(env_vars, list):
+                    for env_var in env_vars:
+                        if isinstance(env_var, str) and 'FREQTRADE_STRATEGY=' in env_var:
+                            env_strategy = env_var.split('FREQTRADE_STRATEGY=')[1]
+                            break
+            
+            # Check for mismatch
+            has_mismatch = False
+            mismatch_details = None
+            
+            if command_strategy != 'Unknown' and env_strategy != 'Unknown':
+                if command_strategy != env_strategy:
+                    has_mismatch = True
+                    mismatch_details = {
+                        'command_strategy': command_strategy,
+                        'env_strategy': env_strategy,
+                        'message': f'Strategy mismatch: command uses "{command_strategy}" but environment uses "{env_strategy}"'
+                    }
+            
+            return {
+                'has_mismatch': has_mismatch,
+                'command_strategy': command_strategy,
+                'env_strategy': env_strategy,
+                'details': mismatch_details
+            }
+            
+        except Exception as e:
+            return {
+                'has_mismatch': False,
+                'command_strategy': 'Unknown',
+                'env_strategy': 'Unknown',
+                'details': {'error': str(e)}
+            }
+    
+    def check_config_consistency(self, service_name, service_config):
+        """Check for config file consistency between command and environment"""
+        try:
+            command_config = 'Unknown'
+            env_config = 'Unknown'
+            
+            # Extract config from command
+            if 'command' in service_config:
+                command = service_config['command']
+                if isinstance(command, list):
+                    for i, arg in enumerate(command):
+                        if arg == '--config' and i + 1 < len(command):
+                            config_part = command[i + 1]
+                            command_config = config_part.replace('/freqtrade/user_data/', '')
+                            break
+            
+            # Extract config from environment
+            if 'environment' in service_config:
+                env_vars = service_config['environment']
+                if isinstance(env_vars, list):
+                    for env_var in env_vars:
+                        if isinstance(env_var, str) and 'FREQTRADE_CONFIG_FILE=' in env_var:
+                            config_part = env_var.split('FREQTRADE_CONFIG_FILE=')[1]
+                            env_config = config_part.replace('/freqtrade/user_data/', '')
+                            break
+            
+            # Check for mismatch
+            has_mismatch = False
+            mismatch_details = None
+            
+            if command_config != 'Unknown' and env_config != 'Unknown':
+                if command_config != env_config:
+                    has_mismatch = True
+                    mismatch_details = {
+                        'command_config': command_config,
+                        'env_config': env_config,
+                        'message': f'Config mismatch: command uses "{command_config}" but environment uses "{env_config}"'
+                    }
+            
+            return {
+                'has_mismatch': has_mismatch,
+                'command_config': command_config,
+                'env_config': env_config,
+                'details': mismatch_details
+            }
+            
+        except Exception as e:
+            return {
+                'has_mismatch': False,
+                'command_config': 'Unknown',
+                'env_config': 'Unknown',
+                'details': {'error': str(e)}
+            }
+    
+    def validate_strategy_availability(self, service_name, service_config, strategy_name):
+        """Validate that the strategy file exists and is properly configured"""
+        try:
+            if not strategy_name or strategy_name == 'Unknown':
+                return {
+                    'success': True,
+                    'valid': False,
+                    'strategy_found': False,
+                    'strategy_path': None,
+                    'syntax_valid': False,
+                    'class_found': False,
+                    'priority': 'warning',
+                    'message': 'No strategy specified'
+                }
+            
+            # Check for strategy consistency between command and environment
+            consistency_check = self.check_strategy_consistency(service_name, service_config)
+            inconsistency_message = None
+            
+            if consistency_check['has_mismatch']:
+                inconsistency_message = consistency_check['details']['message']
+            
+            # Find strategy file using Docker volume mappings
+            strategy_path = self.find_strategy_file_in_service(strategy_name, service_config)
+            
+            if not strategy_path or not strategy_path.exists():
+                # Check if there's a similar strategy name available
+                similar_strategies = []
+                if self.strategies_path.exists():
+                    strategy_files = [f.stem for f in self.strategies_path.glob('*.py') if f.is_file() and not f.name.startswith('__')]
+                    similar_strategies = [s for s in strategy_files if strategy_name.lower() in s.lower() or s.lower() in strategy_name.lower()]
+                
+                error_msg = f'Strategy file "{strategy_name}.py" not found'
+                if similar_strategies:
+                    error_msg += f'. Similar strategies found: {", ".join(similar_strategies)}'
+                if inconsistency_message:
+                    error_msg = f'{inconsistency_message}. {error_msg}'
+                
+                return {
+                    'success': True,
+                    'valid': False,
+                    'strategy_found': False,
+                    'strategy_path': str(strategy_path) if strategy_path else None,
+                    'syntax_valid': False,
+                    'class_found': False,
+                    'priority': 'error',
+                    'message': error_msg,
+                    'similar_strategies': similar_strategies,
+                    'has_mismatch': inconsistency_message is not None,
+                    'consistency_check': consistency_check
+                }
+            
+            # Check if file is readable
+            try:
+                with open(strategy_path, 'r', encoding='utf-8') as f:
+                    strategy_content = f.read()
+            except Exception as e:
+                error_msg = f'Cannot read strategy file: {e}'
+                if inconsistency_message:
+                    error_msg = f'{inconsistency_message}. {error_msg}'
+                return {
+                    'success': True,
+                    'valid': False,
+                    'strategy_found': True,
+                    'strategy_path': str(strategy_path),
+                    'syntax_valid': False,
+                    'class_found': False,
+                    'priority': 'error',
+                    'message': error_msg,
+                    'has_mismatch': inconsistency_message is not None,
+                    'consistency_check': consistency_check
+                }
+            
+            # Basic syntax validation
+            syntax_valid = True
+            syntax_errors = []
+            try:
+                compile(strategy_content, strategy_path, 'exec')
+            except SyntaxError as e:
+                syntax_valid = False
+                syntax_errors.append(f"Line {e.lineno}: {e.msg}")
+            except Exception as e:
+                syntax_valid = False
+                syntax_errors.append(f"Compilation error: {e}")
+            
+            # Check for strategy class
+            class_found = False
+            class_errors = []
+            
+            if syntax_valid:
+                # Look for class definition
+                import re
+                class_pattern = rf'class\s+{re.escape(strategy_name)}\s*\([^)]*IStrategy[^)]*\)'
+                base_class_pattern = r'class\s+\w+\s*\([^)]*IStrategy[^)]*\)'
+                
+                if re.search(class_pattern, strategy_content):
+                    class_found = True
+                elif re.search(base_class_pattern, strategy_content):
+                    # Found a strategy class but wrong name
+                    class_errors.append(f"Strategy class name doesn't match file name '{strategy_name}'")
+                else:
+                    class_errors.append("No IStrategy-based class found")
+                
+                # Check for required methods
+                if class_found:
+                    required_methods = ['populate_indicators', 'populate_entry_trend', 'populate_exit_trend']
+                    missing_methods = []
+                    
+                    for method in required_methods:
+                        if f'def {method}(' not in strategy_content:
+                            missing_methods.append(method)
+                    
+                    if missing_methods:
+                        class_errors.append(f"Missing required methods: {', '.join(missing_methods)}")
+            
+            # Determine overall validity - include inconsistency check
+            is_valid = syntax_valid and class_found and not class_errors and not inconsistency_message
+            
+            # Build message
+            messages = []
+            if inconsistency_message:
+                messages.append(inconsistency_message)
+            if not syntax_valid:
+                messages.extend([f"Syntax error: {err}" for err in syntax_errors])
+            if class_errors:
+                messages.extend(class_errors)
+            
+            if not messages:
+                messages = ['Strategy validation passed']
+            
+            # Determine priority - inconsistency is error level
+            if inconsistency_message or not syntax_valid:
+                priority = 'error'
+            elif class_errors:
+                priority = 'warning'
+            else:
+                priority = 'success'
+            
+            return {
+                'success': True,
+                'valid': is_valid,
+                'strategy_found': True,
+                'strategy_path': str(strategy_path),
+                'syntax_valid': syntax_valid,
+                'class_found': class_found,
+                'priority': priority,
+                'message': '; '.join(messages),
+                'has_mismatch': inconsistency_message is not None,
+                'consistency_check': consistency_check
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'valid': False,
+                'strategy_found': False,
+                'strategy_path': None,
+                'syntax_valid': False,
+                'class_found': False,
+                'priority': 'error',
+                'message': f'Strategy validation error: {e}',
+                'has_mismatch': False
+            }
+    
+    def validate_config_file(self, service_name, service_config, config_file):
+        """Validate that the config file exists and has proper structure"""
+        try:
+            if not config_file or config_file == 'Unknown':
+                return {
+                    'success': True,
+                    'valid': False,
+                    'config_found': False,
+                    'config_path': None,
+                    'json_valid': False,
+                    'structure_valid': False,
+                    'api_configured': False,
+                    'priority': 'warning',
+                    'message': 'No config file specified'
+                }
+            
+            # Check for config consistency between command and environment
+            consistency_check = self.check_config_consistency(service_name, service_config)
+            inconsistency_message = None
+            
+            if consistency_check['has_mismatch']:
+                inconsistency_message = consistency_check['details']['message']
+            
+            # Extract just filename if it's a full path
+            if '/' in config_file:
+                config_filename = config_file.split('/')[-1]
+            else:
+                config_filename = config_file
+            
+            # Find config file using Docker volume mappings
+            config_path = self.find_config_file_in_service(config_filename, service_config)
+            
+            if not config_path:
+                error_msg = f'Config file "{config_filename}" not found'
+                if inconsistency_message:
+                    error_msg = f'{inconsistency_message}. {error_msg}'
+                
+                return {
+                    'success': True,
+                    'valid': False,
+                    'config_found': False,
+                    'config_path': config_filename,
+                    'json_valid': False,
+                    'structure_valid': False,
+                    'api_configured': False,
+                    'priority': 'error',
+                    'message': error_msg,
+                    'has_mismatch': inconsistency_message is not None,
+                    'consistency_check': consistency_check
+                }
+            
+            # Read and parse config
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_data = json.load(f)
+            except json.JSONDecodeError as e:
+                error_msg = f'Invalid JSON syntax: {e}'
+                if inconsistency_message:
+                    error_msg = f'{inconsistency_message}. {error_msg}'
+                return {
+                    'success': True,
+                    'valid': False,
+                    'config_found': True,
+                    'config_path': str(config_path),
+                    'json_valid': False,
+                    'structure_valid': False,
+                    'api_configured': False,
+                    'priority': 'error',
+                    'message': error_msg,
+                    'has_mismatch': inconsistency_message is not None,
+                    'consistency_check': consistency_check
+                }
+            except Exception as e:
+                error_msg = f'Cannot read config file: {e}'
+                if inconsistency_message:
+                    error_msg = f'{inconsistency_message}. {error_msg}'
+                return {
+                    'success': True,
+                    'valid': False,
+                    'config_found': True,
+                    'config_path': str(config_path),
+                    'json_valid': False,
+                    'structure_valid': False,
+                    'api_configured': False,
+                    'priority': 'error',
+                    'message': error_msg,
+                    'has_mismatch': inconsistency_message is not None,
+                    'consistency_check': consistency_check
+                }
+            
+            # Validate config structure
+            structure_errors = []
+            required_fields = ['max_open_trades', 'stake_currency', 'stake_amount', 'dry_run', 'timeframe']
+            
+            for field in required_fields:
+                if field not in config_data:
+                    structure_errors.append(f"Missing required field: {field}")
+            
+            # Check exchange configuration
+            if 'exchange' not in config_data:
+                structure_errors.append("Missing 'exchange' configuration")
+            else:
+                exchange_config = config_data['exchange']
+                if 'name' not in exchange_config:
+                    structure_errors.append("Exchange name not specified")
+                if 'pair_whitelist' not in exchange_config or not exchange_config['pair_whitelist']:
+                    structure_errors.append("No trading pairs specified")
+            
+            # Check API server configuration
+            api_configured = False
+            api_errors = []
+            
+            if 'api_server' in config_data:
+                api_config = config_data['api_server']
+                if api_config.get('enabled', False):
+                    api_configured = True
+                    if 'listen_port' not in api_config:
+                        api_errors.append("API server enabled but no port specified")
+                    if 'listen_ip_address' not in api_config:
+                        api_errors.append("API server enabled but no IP specified")
+                else:
+                    api_errors.append("API server is disabled")
+            else:
+                api_errors.append("No API server configuration found")
+            
+            # Check strategy configuration
+            strategy_errors = []
+            if 'strategy' not in config_data:
+                strategy_errors.append("No strategy specified in config")
+            
+            # Check for common configuration issues
+            warning_messages = []
+            
+            if config_data.get('dry_run', True) == False:
+                warning_messages.append("Live trading enabled (dry_run=false)")
+            
+            if config_data.get('max_open_trades', 0) > 20:
+                warning_messages.append(f"High max_open_trades: {config_data['max_open_trades']}")
+            
+            if config_data.get('stake_amount', 0) > 1000:
+                warning_messages.append(f"High stake_amount: {config_data['stake_amount']}")
+            
+            # Determine overall validity
+            structure_valid = len(structure_errors) == 0
+            has_warnings = len(api_errors) > 0 or len(strategy_errors) > 0 or len(warning_messages) > 0
+            
+            # Determine overall validity - include inconsistency check
+            overall_valid = structure_valid and not inconsistency_message
+            
+            # Build message
+            messages = []
+            if inconsistency_message:
+                messages.append(inconsistency_message)
+            if structure_errors:
+                messages.extend([f"Structure error: {err}" for err in structure_errors])
+            if api_errors:
+                messages.extend([f"API issue: {err}" for err in api_errors])
+            if strategy_errors:
+                messages.extend([f"Strategy issue: {err}" for err in strategy_errors])
+            if warning_messages:
+                messages.extend([f"Warning: {warn}" for warn in warning_messages])
+            
+            if not messages:
+                messages = ['Config validation passed']
+            
+            # Determine priority - inconsistency is error level
+            if inconsistency_message or structure_errors:
+                priority = 'error'
+            elif api_errors or strategy_errors:
+                priority = 'warning'
+            elif warning_messages:
+                priority = 'info'
+            else:
+                priority = 'success'
+            
+            return {
+                'success': True,
+                'valid': overall_valid,
+                'config_found': True,
+                'config_path': str(config_path),
+                'json_valid': True,
+                'structure_valid': structure_valid,
+                'api_configured': api_configured,
+                'priority': priority,
+                'message': '; '.join(messages),
+                'has_mismatch': inconsistency_message is not None,
+                'consistency_check': consistency_check
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'valid': False,
+                'config_found': False,
+                'config_path': None,
+                'json_valid': False,
+                'structure_valid': False,
+                'api_configured': False,
+                'priority': 'error',
+                'message': f'Config validation error: {e}',
+                'has_mismatch': False
+            }
     
     def get_docker_compose_content(self):
         """Get the raw docker-compose.yml content"""
@@ -783,6 +1513,42 @@ class FreqTradeManager:
             return False
         except Exception as e:
             print(f"Error removing Docker service: {e}")
+            return False
+    
+    def add_general_docker_service(self, service_name, service_config):
+        """Add a general Docker service to docker-compose.yml"""
+        try:
+            print(f"Adding general Docker service: {service_name}")
+            compose_data = self.load_docker_compose()
+            if not compose_data:
+                # Create basic structure if file doesn't exist
+                compose_data = {
+                    'version': '3.8',
+                    'services': {},
+                    'networks': {
+                        'freqtrade_network': {
+                            'driver': 'bridge'
+                        }
+                    }
+                }
+            
+            # Ensure services key exists
+            if 'services' not in compose_data:
+                compose_data['services'] = {}
+                
+            # Check if service already exists
+            if service_name in compose_data['services']:
+                print(f"Service {service_name} already exists")
+                return False
+            
+            # Add the service configuration
+            compose_data['services'][service_name] = service_config
+            
+            # Save the updated compose file
+            return self.save_docker_compose(compose_data)
+            
+        except Exception as e:
+            print(f"Error adding general Docker service {service_name}: {e}")
             return False
     
     def start_docker_service(self, service_name):
@@ -1047,7 +1813,8 @@ class FreqTradeManager:
                             return "stopped"
                         else:
                             return "unknown"
-                    return "not_found"
+                    # If not found in compose, try direct container check
+                    return self._check_container_directly(service_name)
             except Exception as e:
                 print(f"Error with 'docker compose' ps: {e}")
             
@@ -1069,14 +1836,74 @@ class FreqTradeManager:
                             return "stopped"
                         else:
                             return "unknown"
-                    return "not_found"
+                    # If not found in compose, try direct container check
+                    return self._check_container_directly(service_name)
             except Exception:
                 pass
                 
         except Exception as e:
             print(f"Error getting service status: {e}")
             
-        return "unknown"
+        # Final fallback: check for container directly
+        return self._check_container_directly(service_name)
+    
+    def _check_container_directly(self, service_name):
+        """Check container status directly using docker ps, fallback for when compose fails"""
+        try:
+            # Get the container name from service config
+            compose_data = self.load_docker_compose()
+            container_name = service_name  # Default to service name
+            
+            if compose_data and 'services' in compose_data and service_name in compose_data['services']:
+                service_config = compose_data['services'][service_name]
+                container_name = service_config.get('container_name', service_name)
+            
+            # Check for container by name
+            result = subprocess.run(
+                ['docker', 'ps', '-a', '--filter', f'name={container_name}', '--format', 'table {{.Names}}\t{{.Status}}'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                output = result.stdout.strip()
+                lines = output.split('\n')[1:]  # Skip header
+                for line in lines:
+                    if line and container_name in line:
+                        if 'Up' in line:
+                            return "running"
+                        elif 'Exited' in line:
+                            return "stopped"
+                        else:
+                            return "unknown"
+            
+            # Also try checking by service name if container name didn't work
+            if container_name != service_name:
+                result = subprocess.run(
+                    ['docker', 'ps', '-a', '--filter', f'name={service_name}', '--format', 'table {{.Names}}\t{{.Status}}'],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                if result.returncode == 0:
+                    output = result.stdout.strip()
+                    lines = output.split('\n')[1:]  # Skip header
+                    for line in lines:
+                        if line and service_name in line:
+                            if 'Up' in line:
+                                return "running"
+                            elif 'Exited' in line:
+                                return "stopped"
+                            else:
+                                return "unknown"
+            
+            return "not_found"
+            
+        except Exception as e:
+            print(f"Error checking container directly: {e}")
+            return "unknown"
     
     def validate_docker_compose_yaml(self, yaml_content):
         """Validate Docker Compose YAML content"""
@@ -1104,6 +1931,141 @@ class FreqTradeManager:
             return False, f"YAML syntax error: {str(e)}"
         except Exception as e:
             return False, f"Validation error: {str(e)}"
+
+    def rationalize_docker_compose_yaml(self, yaml_content):
+        """Rationalize and fix common YAML issues in Docker Compose files"""
+        try:
+            # Parse the YAML
+            yaml_data = yaml.safe_load(yaml_content)
+            issues_found = []
+            issues_fixed = []
+            
+            if not isinstance(yaml_data, dict):
+                return False, "YAML content must be a dictionary", [], []
+            
+            # Remove deprecated version field if present
+            if 'version' in yaml_data:
+                del yaml_data['version']
+                issues_fixed.append("Removed deprecated 'version' field")
+            
+            # Ensure required sections exist
+            if 'services' not in yaml_data:
+                yaml_data['services'] = {}
+                issues_fixed.append("Added missing 'services' section")
+            
+            if 'networks' not in yaml_data:
+                yaml_data['networks'] = {}
+                issues_fixed.append("Added missing 'networks' section")
+            
+            # Add default network if missing
+            if 'freqtrade_network' not in yaml_data['networks']:
+                yaml_data['networks']['freqtrade_network'] = {'driver': 'bridge'}
+                issues_fixed.append("Added default 'freqtrade_network'")
+            
+            # Rationalize each service
+            for service_name, service_config in yaml_data['services'].items():
+                if not isinstance(service_config, dict):
+                    issues_found.append(f"Service '{service_name}' has invalid configuration structure")
+                    continue
+                
+                # Fix command formatting
+                if 'command' in service_config:
+                    command = service_config['command']
+                    if isinstance(command, str):
+                        # Convert multiline string commands to arrays
+                        if '\n' in command or '\\' in command:
+                            # Split on newlines and remove line continuations
+                            command_parts = [line.strip().rstrip('\\') for line in command.split('\n') if line.strip()]
+                            if len(command_parts) > 1:
+                                service_config['command'] = [part for part in ' '.join(command_parts).split() if part]
+                                issues_fixed.append(f"Service '{service_name}': Fixed multiline command formatting")
+                
+                # Ensure essential fields exist
+                if 'image' not in service_config:
+                    service_config['image'] = 'freqtradeorg/freqtrade:stable'
+                    issues_fixed.append(f"Service '{service_name}': Added default image")
+                
+                if 'restart' not in service_config:
+                    service_config['restart'] = 'unless-stopped'
+                    issues_fixed.append(f"Service '{service_name}': Added default restart policy")
+                
+                # Fix networks formatting
+                if 'networks' in service_config:
+                    networks = service_config['networks']
+                    if isinstance(networks, str):
+                        service_config['networks'] = [networks]
+                        issues_fixed.append(f"Service '{service_name}': Converted networks string to list")
+                    elif not isinstance(networks, list):
+                        service_config['networks'] = ['freqtrade_network']
+                        issues_fixed.append(f"Service '{service_name}': Fixed networks format")
+                else:
+                    service_config['networks'] = ['freqtrade_network']
+                    issues_fixed.append(f"Service '{service_name}': Added default network")
+                
+                # Fix ports formatting and validate
+                if 'ports' in service_config:
+                    ports = service_config['ports']
+                    if isinstance(ports, str):
+                        service_config['ports'] = [ports]
+                        issues_fixed.append(f"Service '{service_name}': Converted ports string to list")
+                    elif isinstance(ports, list):
+                        # Validate port mappings
+                        for i, port in enumerate(ports):
+                            if isinstance(port, str):
+                                # Check for valid port format
+                                if ':' not in port:
+                                    issues_found.append(f"Service '{service_name}': Invalid port format '{port}' (should be host:container)")
+                                else:
+                                    # Validate port numbers
+                                    parts = port.split(':')
+                                    if len(parts) == 2:
+                                        try:
+                                            host_port = int(parts[0]) if parts[0] != '0.0.0.0' else int(parts[1])
+                                            container_port = int(parts[1])
+                                            if not (1 <= host_port <= 65535) or not (1 <= container_port <= 65535):
+                                                issues_found.append(f"Service '{service_name}': Port numbers out of valid range (1-65535)")
+                                        except ValueError:
+                                            issues_found.append(f"Service '{service_name}': Invalid port numbers in '{port}'")
+                                    elif len(parts) == 3:
+                                        # Format: ip:host:container
+                                        try:
+                                            host_port = int(parts[1])
+                                            container_port = int(parts[2])
+                                            if not (1 <= host_port <= 65535) or not (1 <= container_port <= 65535):
+                                                issues_found.append(f"Service '{service_name}': Port numbers out of valid range (1-65535)")
+                                        except ValueError:
+                                            issues_found.append(f"Service '{service_name}': Invalid port numbers in '{port}'")
+                
+                # Fix volumes formatting
+                if 'volumes' in service_config:
+                    volumes = service_config['volumes']
+                    if isinstance(volumes, str):
+                        service_config['volumes'] = [volumes]
+                        issues_fixed.append(f"Service '{service_name}': Converted volumes string to list")
+                
+                # Fix environment formatting
+                if 'environment' in service_config:
+                    environment = service_config['environment']
+                    if isinstance(environment, str):
+                        service_config['environment'] = [environment]
+                        issues_fixed.append(f"Service '{service_name}': Converted environment string to list")
+                
+                # Check for container_name consistency
+                if 'container_name' in service_config:
+                    container_name = service_config['container_name']
+                    if container_name != service_name and not container_name.startswith(service_name):
+                        issues_found.append(f"Service '{service_name}': Container name '{container_name}' doesn't match service name")
+            
+            # Generate clean YAML output
+            yaml_output = yaml.dump(yaml_data, default_flow_style=False, sort_keys=False, 
+                                  allow_unicode=True, indent=2, width=120)
+            
+            return True, yaml_output, issues_found, issues_fixed
+            
+        except yaml.YAMLError as e:
+            return False, f"YAML syntax error: {str(e)}", [], []
+        except Exception as e:
+            return False, f"Rationalization error: {str(e)}", [], []
 
     def fix_docker_compose_formatting(self):
         """Fix formatting issues in docker-compose.yml"""
@@ -1380,6 +2342,33 @@ def update_docker_compose():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/docker-compose/add-service', methods=['POST'])
+def add_docker_service():
+    """Add a service to docker-compose.yml"""
+    try:
+        data = request.get_json()
+        service_name = data.get('service_name')
+        service_config = data.get('service_config')
+        
+        if not service_name or not service_config:
+            return jsonify({'error': 'service_name and service_config are required'}), 400
+        
+        # Use global manager to add the service
+        success = manager.add_general_docker_service(service_name, service_config)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Successfully added {service_name} to docker-compose.yml'
+            })
+        else:
+            return jsonify({
+                'error': f'Failed to add {service_name} to docker-compose.yml'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/docker-compose/remove/<service_name>', methods=['DELETE'])
 def remove_docker_service(service_name):
     """Remove a service from docker-compose.yml"""
@@ -1593,6 +2582,115 @@ def remove_docker_network(network_name):
             'error': str(e)
         }), 500
 
+@app.route('/api/docker/networks/<network_name>', methods=['GET'])
+def get_network_config(network_name):
+    """Get configuration for a specific network"""
+    try:
+        if manager.docker_client:
+            try:
+                network = manager.docker_client.networks.get(network_name)
+                network_config = {
+                    'name': network.name,
+                    'driver': network.attrs.get('Driver', 'bridge'),
+                    'internal': network.attrs.get('Internal', False),
+                    'attachable': network.attrs.get('Attachable', False),
+                    'ipam': network.attrs.get('IPAM', {}),
+                    'options': network.attrs.get('Options', {}),
+                    'labels': network.attrs.get('Labels', {})
+                }
+                return jsonify({
+                    'success': True,
+                    'network': network_config
+                })
+            except Exception as docker_error:
+                # If not found in Docker, try to get from compose file
+                compose_path = os.path.join(os.getcwd(), 'docker-compose.yml')
+                if os.path.exists(compose_path):
+                    with open(compose_path, 'r') as f:
+                        compose_data = yaml.safe_load(f)
+                    
+                    if 'networks' in compose_data and network_name in compose_data['networks']:
+                        network_config = compose_data['networks'][network_name]
+                        return jsonify({
+                            'success': True,
+                            'network': network_config
+                        })
+                
+                return jsonify({
+                    'success': False,
+                    'error': f'Network {network_name} not found'
+                }), 404
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Docker client not available'
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/docker/networks/<network_name>', methods=['PUT'])
+def update_network_config(network_name):
+    """Update network configuration in docker-compose.yml"""
+    try:
+        data = request.get_json()
+        compose_path = os.path.join(os.getcwd(), 'docker-compose.yml')
+        
+        if not os.path.exists(compose_path):
+            return jsonify({
+                'success': False,
+                'error': 'docker-compose.yml not found'
+            }), 404
+        
+        with open(compose_path, 'r') as f:
+            compose_data = yaml.safe_load(f)
+        
+        if 'networks' not in compose_data:
+            compose_data['networks'] = {}
+        
+        # Build network configuration
+        network_config = {}
+        
+        if data.get('driver') and data['driver'] != 'bridge':
+            network_config['driver'] = data['driver']
+        
+        if data.get('internal'):
+            network_config['internal'] = True
+        
+        if data.get('attachable'):
+            network_config['attachable'] = True
+        
+        # Handle IPAM configuration
+        if data.get('ipam'):
+            network_config['ipam'] = data['ipam']
+        
+        # Handle labels
+        if data.get('labels'):
+            network_config['labels'] = data['labels']
+        
+        # Handle driver options
+        if data.get('options'):
+            network_config['driver_opts'] = data['options']
+        
+        # Update or create the network in compose
+        compose_data['networks'][network_name] = network_config
+        
+        # Write back to file
+        with open(compose_path, 'w') as f:
+            yaml.dump(compose_data, f, default_flow_style=False, sort_keys=False)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Network {network_name} updated successfully'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/docker/start/<service_name>', methods=['POST'])
 def start_docker_service_api(service_name):
     """Start a specific Docker service"""
@@ -1698,6 +2796,35 @@ def stop_all_docker_services_api():
             'error': str(e)
         }), 500
 
+@app.route('/api/docker/restart-all', methods=['POST'])
+def restart_all_docker_services_api():
+    """Restart all Docker services"""
+    try:
+        # First stop all services, then start them
+        stop_success = manager.stop_all_docker_services()
+        if stop_success:
+            start_success = manager.start_all_docker_services()
+            if start_success:
+                return jsonify({
+                    'success': True,
+                    'message': 'All services restarted successfully'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to start services after stopping'
+                }), 500
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to stop services for restart'
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 def is_docker_available():
     """Check if Docker client is available and working"""
     global docker_client
@@ -1750,6 +2877,482 @@ def get_docker_status():
             'containers': [],
             'images': []
         }
+
+@app.route('/api/docker-compose/service/<service_name>', methods=['GET'])
+def get_service_config(service_name):
+    """Get configuration for a specific service"""
+    try:
+        compose_path = os.path.join(os.getcwd(), 'docker-compose.yml')
+        if not os.path.exists(compose_path):
+            return jsonify({
+                'success': False,
+                'error': 'docker-compose.yml not found'
+            }), 404
+        
+        with open(compose_path, 'r') as f:
+            compose_data = yaml.safe_load(f)
+        
+        if 'services' not in compose_data or service_name not in compose_data['services']:
+            return jsonify({
+                'success': False,
+                'error': f'Service {service_name} not found'
+            }), 404
+        
+        service_config = compose_data['services'][service_name]
+        service_yaml = yaml.dump({service_name: service_config}, default_flow_style=False)
+        
+        return jsonify({
+            'success': True,
+            'service': service_config,
+            'yaml': service_yaml
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/docker-compose/service/<service_name>', methods=['PUT'])
+def update_service_config(service_name):
+    """Update configuration for a specific service"""
+    try:
+        data = request.get_json()
+        compose_path = os.path.join(os.getcwd(), 'docker-compose.yml')
+        
+        if not os.path.exists(compose_path):
+            return jsonify({
+                'success': False,
+                'error': 'docker-compose.yml not found'
+            }), 404
+        
+        with open(compose_path, 'r') as f:
+            compose_data = yaml.safe_load(f)
+        
+        if 'services' not in compose_data:
+            compose_data['services'] = {}
+        
+        if 'yaml' in data:
+            # Update from YAML
+            try:
+                yaml_data = yaml.safe_load(data['yaml'])
+                if service_name in yaml_data:
+                    compose_data['services'][service_name] = yaml_data[service_name]
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Service name mismatch in YAML'
+                    }), 400
+            except yaml.YAMLError as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid YAML: {str(e)}'
+                }), 400
+        else:
+            # Update from visual form
+            service_config = {}
+            
+            if data.get('image'):
+                service_config['image'] = data['image']
+            if data.get('container_name'):
+                service_config['container_name'] = data['container_name']
+            if data.get('restart'):
+                service_config['restart'] = data['restart']
+            if data.get('ports'):
+                service_config['ports'] = [p for p in data['ports'] if p.strip()]
+            if data.get('volumes'):
+                service_config['volumes'] = [v for v in data['volumes'] if v.strip()]
+            if data.get('command'):
+                if ' ' in data['command']:
+                    service_config['command'] = data['command'].split()
+                else:
+                    service_config['command'] = data['command']
+            if data.get('environment'):
+                service_config['environment'] = [e for e in data['environment'] if e.strip()]
+            if data.get('networks'):
+                service_config['networks'] = data['networks']
+            
+            compose_data['services'][service_name] = service_config
+        
+        # Write back to file
+        with open(compose_path, 'w') as f:
+            yaml.dump(compose_data, f, default_flow_style=False, sort_keys=False)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Service {service_name} updated successfully'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/docker-compose/validate', methods=['POST'])
+def validate_yaml():
+    """Validate YAML content"""
+    try:
+        data = request.get_json()
+        yaml_content = data.get('yaml', '')
+        
+        # Try to parse the YAML
+        yaml.safe_load(yaml_content)
+        
+        return jsonify({
+            'valid': True,
+            'message': 'YAML is valid'
+        })
+    except yaml.YAMLError as e:
+        return jsonify({
+            'valid': False,
+            'error': str(e)
+        })
+    except Exception as e:
+        return jsonify({
+            'valid': False,
+            'error': str(e)
+        })
+
+@app.route('/api/docker-compose/validate-port-consistency/<service_name>', methods=['GET'])
+def validate_port_consistency_api(service_name):
+    """API endpoint to validate port consistency for a service"""
+    try:
+        # Get the compose data and service configuration
+        compose_data = manager.load_docker_compose()
+        if not compose_data or 'services' not in compose_data:
+            return jsonify({
+                'success': False,
+                'error': 'No docker-compose.yml found or no services defined',
+                'consistent': False
+            })
+        
+        if service_name not in compose_data['services']:
+            return jsonify({
+                'success': False,
+                'error': f'Service {service_name} not found',
+                'consistent': False
+            })
+        
+        service_config = compose_data['services'][service_name]
+        
+        # Try to determine config file from service environment or command
+        config_file = 'Unknown'
+        if 'command' in service_config:
+            command = service_config['command']
+            if isinstance(command, list):
+                command = ' '.join(command)
+            
+            # Look for --config parameter in command
+            if '--config' in command:
+                parts = command.split('--config')
+                if len(parts) > 1:
+                    config_part = parts[1].strip().split()[0]
+                    config_file = config_part.replace('/freqtrade/user_data/', '')
+        
+        # Also check environment variables
+        if 'environment' in service_config:
+            env_vars = service_config['environment']
+            if isinstance(env_vars, list):
+                for env_var in env_vars:
+                    if 'CONFIG_FILE=' in env_var:
+                        config_file = env_var.split('CONFIG_FILE=')[1]
+                        break
+            elif isinstance(env_vars, dict):
+                config_file = env_vars.get('CONFIG_FILE', config_file)
+        
+        result = manager.validate_port_consistency(service_name, service_config, config_file)
+        
+        return jsonify({
+            'success': True,
+            **result
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'consistent': False
+        })
+
+@app.route('/api/docker-compose/validate-strategy/<service_name>', methods=['GET'])
+def validate_strategy_api(service_name):
+    """API endpoint to validate strategy for a service"""
+    try:
+        # Get the compose data and service configuration
+        compose_data = manager.load_docker_compose()
+        if not compose_data or 'services' not in compose_data:
+            return jsonify({
+                'success': False,
+                'error': 'No docker-compose.yml found or no services defined',
+                'valid': False
+            })
+        
+        if service_name not in compose_data['services']:
+            return jsonify({
+                'success': False,
+                'error': f'Service {service_name} not found',
+                'valid': False
+            })
+        
+        service_config = compose_data['services'][service_name]
+        
+        # Extract strategy from service environment or command
+        strategy = 'Unknown'
+        
+        # Check environment variables
+        if 'environment' in service_config:
+            env_vars = service_config['environment']
+            if isinstance(env_vars, list):
+                for env_var in env_vars:
+                    if isinstance(env_var, str) and 'STRATEGY=' in env_var:
+                        strategy = env_var.split('STRATEGY=')[1]
+                        break
+        
+        # Check command arguments
+        if 'command' in service_config:
+            command = service_config['command']
+            if isinstance(command, list):
+                for i, arg in enumerate(command):
+                    if arg == '--strategy' and i + 1 < len(command):
+                        strategy = command[i + 1]
+                        break
+        
+        result = manager.validate_strategy_availability(service_name, service_config, strategy)
+        
+        return jsonify({
+            'success': True,
+            **result
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'valid': False
+        })
+
+@app.route('/api/docker-compose/validate-config/<service_name>', methods=['GET'])
+def validate_config_api(service_name):
+    """API endpoint to validate config file for a service"""
+    try:
+        # Get the compose data and service configuration
+        compose_data = manager.load_docker_compose()
+        if not compose_data or 'services' not in compose_data:
+            return jsonify({
+                'success': False,
+                'error': 'No docker-compose.yml found or no services defined',
+                'valid': False
+            })
+        
+        if service_name not in compose_data['services']:
+            return jsonify({
+                'success': False,
+                'error': f'Service {service_name} not found',
+                'valid': False
+            })
+        
+        service_config = compose_data['services'][service_name]
+        
+        # Extract config file from service environment or command
+        config_file = 'Unknown'
+        
+        if 'command' in service_config:
+            command = service_config['command']
+            if isinstance(command, list):
+                command = ' '.join(command)
+            
+            # Look for --config parameter in command
+            if '--config' in command:
+                parts = command.split('--config')
+                if len(parts) > 1:
+                    config_part = parts[1].strip().split()[0]
+                    config_file = config_part.replace('/freqtrade/user_data/', '')
+        
+        # Also check environment variables
+        if 'environment' in service_config:
+            env_vars = service_config['environment']
+            if isinstance(env_vars, list):
+                for env_var in env_vars:
+                    if isinstance(env_var, str) and 'CONFIG_FILE=' in env_var:
+                        config_file = env_var.split('CONFIG_FILE=')[1]
+                        break
+        
+        result = manager.validate_config_file(service_name, service_config, config_file)
+        
+        return jsonify({
+            'success': True,
+            **result
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'valid': False
+        })
+
+@app.route('/api/docker-compose/validate-all/<service_name>', methods=['GET'])
+def validate_all_api(service_name):
+    """API endpoint to run all validation checks for a service"""
+    try:
+        # Get the compose data and service configuration
+        compose_data = manager.load_docker_compose()
+        if not compose_data or 'services' not in compose_data:
+            return jsonify({
+                'success': False,
+                'error': 'No docker-compose.yml found or no services defined'
+            })
+        
+        if service_name not in compose_data['services']:
+            return jsonify({
+                'success': False,
+                'error': f'Service {service_name} not found'
+            })
+        
+        service_config = compose_data['services'][service_name]
+        
+        # Extract strategy and config from service
+        strategy = 'Unknown'
+        config_file = 'Unknown'
+        
+        # Check environment variables
+        if 'environment' in service_config:
+            env_vars = service_config['environment']
+            if isinstance(env_vars, list):
+                for env_var in env_vars:
+                    if isinstance(env_var, str):
+                        if 'STRATEGY=' in env_var:
+                            strategy = env_var.split('STRATEGY=')[1]
+                        elif 'CONFIG_FILE=' in env_var:
+                            config_file = env_var.split('CONFIG_FILE=')[1]
+        
+        # Check command arguments
+        if 'command' in service_config:
+            command = service_config['command']
+            if isinstance(command, list):
+                for i, arg in enumerate(command):
+                    if arg == '--strategy' and i + 1 < len(command):
+                        strategy = command[i + 1]
+                    elif arg == '--config' and i + 1 < len(command):
+                        config_part = command[i + 1]
+                        config_file = config_part.replace('/freqtrade/user_data/', '')
+        
+        # Run all validations
+        port_result = manager.validate_port_consistency(service_name, service_config, config_file)
+        strategy_result = manager.validate_strategy_availability(service_name, service_config, strategy)
+        config_result = manager.validate_config_file(service_name, service_config, config_file)
+        
+        # Determine overall status with priority system
+        overall_valid = True
+        overall_priority = 'success'
+        issues = []
+        
+        # Port consistency (highest priority for conflicts)
+        if not port_result.get('consistent', False):
+            if port_result.get('port_conflicts', []):
+                overall_valid = False
+                overall_priority = 'error'
+                issues.append(f"Port conflicts: {port_result.get('message', '')}")
+            elif port_result.get('config_missing', True):
+                if overall_priority not in ['error']:
+                    overall_priority = 'warning'
+                issues.append("Config file missing")
+        
+        # Strategy validation
+        if not strategy_result.get('valid', False):
+            if strategy_result.get('priority') == 'error':
+                overall_valid = False
+                overall_priority = 'error'
+            elif strategy_result.get('priority') == 'warning' and overall_priority not in ['error']:
+                overall_priority = 'warning'
+            issues.append(f"Strategy: {strategy_result.get('message', '')}")
+        
+        # Config validation
+        if not config_result.get('valid', False):
+            if config_result.get('priority') == 'error':
+                overall_valid = False
+                overall_priority = 'error'
+            elif config_result.get('priority') == 'warning' and overall_priority not in ['error']:
+                overall_priority = 'warning'
+            issues.append(f"Config: {config_result.get('message', '')}")
+        
+        return jsonify({
+            'success': True,
+            'overall_valid': overall_valid,
+            'overall_priority': overall_priority,
+            'summary': '; '.join(issues) if issues else 'All validations passed',
+            'port_consistency': port_result,
+            'strategy_validation': strategy_result,
+            'config_validation': config_result
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/docker-compose/rationalize', methods=['POST'])
+def rationalize_yaml_api():
+    """API endpoint to rationalize and fix Docker Compose YAML"""
+    try:
+        data = request.get_json()
+        if not data or 'yaml_content' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'YAML content is required'
+            })
+        
+        yaml_content = data['yaml_content']
+        success, result, issues_found, issues_fixed = manager.rationalize_docker_compose_yaml(yaml_content)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'rationalized_yaml': result,
+                'issues_found': issues_found,
+                'issues_fixed': issues_fixed,
+                'has_issues': len(issues_found) > 0,
+                'has_fixes': len(issues_fixed) > 0
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result,
+                'issues_found': issues_found,
+                'issues_fixed': issues_fixed
+            })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/docker-compose/validate-yaml', methods=['POST'])
+def validate_yaml_api():
+    """API endpoint to validate Docker Compose YAML without changes"""
+    try:
+        data = request.get_json()
+        if not data or 'yaml_content' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'YAML content is required'
+            })
+        
+        yaml_content = data['yaml_content']
+        is_valid, message = manager.validate_docker_compose_yaml(yaml_content)
+        
+        return jsonify({
+            'success': True,
+            'valid': is_valid,
+            'message': message
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
 if __name__ == '__main__':
     # Create directories if they don't exist
