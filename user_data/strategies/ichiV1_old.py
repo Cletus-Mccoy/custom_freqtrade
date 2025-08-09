@@ -43,10 +43,10 @@ class ichiV1(IStrategy):
     stoploss = -0.275
 
     # Optimal timeframe for the strategy
-    timeframe = '5m'  
+    timeframe = '3m'  # Updated to match config
 
-    startup_candle_count = 200
-    process_only_new_candles = True
+    startup_candle_count = 96
+    process_only_new_candles = False
 
     trailing_stop = False
     #trailing_stop_positive = 0.002
@@ -93,45 +93,23 @@ class ichiV1(IStrategy):
         This function will automatically expand the defined features on the config defined
         `include_timeframes`, `include_shifted_candles`, and `include_corr_pairs`.
         """
-        # Add Ichimoku features with safety checks
-        safe_period = max(3, period) if period is not None else 14
-        safe_kijun_period = max(9, safe_period * 3)  # Ensure minimum period for kijun
+        # Add Ichimoku features
+        dataframe[f"%-ichimoku_tenkan_period_{period}"] = ta.SMA(dataframe["close"], timeperiod=period)
+        dataframe[f"%-ichimoku_kijun_period_{period}"] = ta.SMA(dataframe["close"], timeperiod=period * 3)
         
-        dataframe[f"%-ichimoku_tenkan_period_{period}"] = ta.SMA(dataframe["close"], timeperiod=safe_period)
-        dataframe[f"%-ichimoku_kijun_period_{period}"] = ta.SMA(dataframe["close"], timeperiod=safe_kijun_period)
-        
-        # Add EMA features for different periods with safety checks
-        dataframe[f"%-ema_{period}"] = ta.EMA(dataframe["close"], timeperiod=safe_period)
-        dataframe[f"%-ema_open_{period}"] = ta.EMA(dataframe["open"], timeperiod=safe_period)
+        # Add EMA features for different periods
+        dataframe[f"%-ema_{period}"] = ta.EMA(dataframe["close"], timeperiod=period)
+        dataframe[f"%-ema_open_{period}"] = ta.EMA(dataframe["open"], timeperiod=period)
         
         # Add fan magnitude features
-        if period is None or not isinstance(period, int) or period <= 0:
-            period = 8  
-
         if period >= 8:
-            # Ensure minimum timeperiods to avoid NaN values
-            short_timeperiod = max(3, period // 8)  # Minimum 3 instead of 1
-            long_timeperiod = max(5, period)  # Ensure long period is at least 5
-            
-            short_ema = ta.EMA(dataframe["close"], timeperiod=short_timeperiod)
-            long_ema = ta.EMA(dataframe["close"], timeperiod=long_timeperiod)
-            
-            # Add safety check to avoid division by zero
-            with np.errstate(divide='ignore', invalid='ignore'):
-                fan_magnitude = short_ema / long_ema
-                # Replace any inf or nan values with 1.0 (neutral)
-                fan_magnitude = np.where(np.isfinite(fan_magnitude), fan_magnitude, 1.0)
-                dataframe[f"%-fan_magnitude_{period}"] = fan_magnitude
-                
-                # Calculate gain with safety checks
-                fan_magnitude_shifted = dataframe[f"%-fan_magnitude_{period}"].shift(1)
-                fan_magnitude_gain = dataframe[f"%-fan_magnitude_{period}"] / fan_magnitude_shifted
-                fan_magnitude_gain = np.where(np.isfinite(fan_magnitude_gain), fan_magnitude_gain, 1.0)
-                dataframe[f"%-fan_magnitude_gain_{period}"] = fan_magnitude_gain
+            short_ema = ta.EMA(dataframe["close"], timeperiod=max(1, period // 8))
+            long_ema = ta.EMA(dataframe["close"], timeperiod=period)
+            dataframe[f"%-fan_magnitude_{period}"] = short_ema / long_ema
+            dataframe[f"%-fan_magnitude_gain_{period}"] = dataframe[f"%-fan_magnitude_{period}"] / dataframe[f"%-fan_magnitude_{period}"].shift(1)
         
-        # Add ATR with safety checks
-        atr_period = max(3, period)  # Ensure minimum period for ATR
-        dataframe[f"%-atr_{atr_period}"] = ta.ATR(dataframe, timeperiod=atr_period)
+        # Add ATR
+        dataframe[f"%-atr_{period}"] = ta.ATR(dataframe, timeperiod=period)
         
         return dataframe
 
@@ -149,20 +127,13 @@ class ichiV1(IStrategy):
         dataframe["%-sma"] = ta.SMA(dataframe, timeperiod=14)
         dataframe["%-ema"] = ta.EMA(dataframe, timeperiod=14)
         
-        # Bollinger bands with safety checks
+        # Bollinger bands
         bollinger = qtpylib.bollinger_bands(dataframe["close"], window=20, stds=2)
         dataframe["%-bb_lowerband"] = bollinger["lower"]
         dataframe["%-bb_middleband"] = bollinger["mid"]
         dataframe["%-bb_upperband"] = bollinger["upper"]
-        
-        # Safe BB percent calculation
-        bb_range = bollinger["upper"] - bollinger["lower"]
-        with np.errstate(divide='ignore', invalid='ignore'):
-            bb_percent = (dataframe["close"] - bollinger["lower"]) / bb_range
-            bb_width = bb_range / bollinger["mid"]
-            # Replace any inf or nan values with neutral values
-            dataframe["%-bb_percent"] = np.where(np.isfinite(bb_percent), bb_percent, 0.5)
-            dataframe["%-bb_width"] = np.where(np.isfinite(bb_width), bb_width, 0.1)
+        dataframe["%-bb_percent"] = (dataframe["close"] - bollinger["lower"]) / (bollinger["upper"] - bollinger["lower"])
+        dataframe["%-bb_width"] = (bollinger["upper"] - bollinger["lower"]) / bollinger["mid"]
         
         return dataframe
 
@@ -172,29 +143,24 @@ class ichiV1(IStrategy):
         This function will be called once with the dataframe of the base timeframe.
         All features must be prepended with `%` to be recognized by FreqAI internals.
         """
-        # Add the original Ichimoku indicators as features with NaN handling
+        # Add the original Ichimoku indicators as features
         ichimoku = ftt.ichimoku(dataframe, conversion_line_period=20, base_line_periods=60, laggin_span=120, displacement=30)
+        dataframe['%-chikou_span'] = ichimoku['chikou_span']
+        dataframe['%-tenkan_sen'] = ichimoku['tenkan_sen']
+        dataframe['%-kijun_sen'] = ichimoku['kijun_sen']
+        dataframe['%-senkou_a'] = ichimoku['senkou_span_a']
+        dataframe['%-senkou_b'] = ichimoku['senkou_span_b']
+        dataframe['%-leading_senkou_span_a'] = ichimoku['leading_senkou_span_a']
+        dataframe['%-leading_senkou_span_b'] = ichimoku['leading_senkou_span_b']
+        dataframe['%-cloud_green'] = ichimoku['cloud_green'].astype(int)
+        dataframe['%-cloud_red'] = ichimoku['cloud_red'].astype(int)
         
-        # Handle potential NaN values in Ichimoku indicators
-        dataframe['%-chikou_span'] = ichimoku['chikou_span'].ffill().bfill()
-        dataframe['%-tenkan_sen'] = ichimoku['tenkan_sen'].ffill().bfill()
-        dataframe['%-kijun_sen'] = ichimoku['kijun_sen'].ffill().bfill()
-        dataframe['%-senkou_a'] = ichimoku['senkou_span_a'].ffill().bfill()
-        dataframe['%-senkou_b'] = ichimoku['senkou_span_b'].ffill().bfill()
-        dataframe['%-leading_senkou_span_a'] = ichimoku['leading_senkou_span_a'].ffill().bfill()
-        dataframe['%-leading_senkou_span_b'] = ichimoku['leading_senkou_span_b'].ffill().bfill()
-        dataframe['%-cloud_green'] = ichimoku['cloud_green'].fillna(0).astype(int)
-        dataframe['%-cloud_red'] = ichimoku['cloud_red'].fillna(0).astype(int)
+        # Add price position relative to cloud
+        dataframe['%-price_above_cloud'] = ((dataframe['close'] > dataframe['%-senkou_a']) & 
+                                           (dataframe['close'] > dataframe['%-senkou_b'])).astype(int)
         
-        # Add price position relative to cloud with safety checks
-        cloud_comparison = ((dataframe['close'] > dataframe['%-senkou_a']) & 
-                           (dataframe['close'] > dataframe['%-senkou_b']))
-        dataframe['%-price_above_cloud'] = cloud_comparison.fillna(False).astype(int)
-        
-        # Add trend strength features with safety checks
-        with np.errstate(divide='ignore', invalid='ignore'):
-            close_open_ratio = dataframe['close'] / dataframe['open']
-            dataframe['%-close_open_ratio'] = np.where(np.isfinite(close_open_ratio), close_open_ratio, 1.0)
+        # Add trend strength features
+        dataframe['%-close_open_ratio'] = dataframe['close'] / dataframe['open']
         
         return dataframe
 
@@ -204,15 +170,8 @@ class ichiV1(IStrategy):
         Required function to set the targets for the machine learning model.
         All targets must be prepended with `&` to be recognized by FreqAI internals.
         """
-        # Predict future price movement (5 candles ahead) with safety checks
-        future_close = dataframe["close"].shift(-5)
-        current_close = dataframe["close"]
-        
-        with np.errstate(divide='ignore', invalid='ignore'):
-            price_change = future_close / current_close - 1
-            # Replace any inf or nan values with 0 (no change)
-            dataframe["&-target"] = np.where(np.isfinite(price_change), price_change, 0.0)
-        
+        # Predict future price movement (5 candles ahead)
+        dataframe["&-target"] = dataframe["close"].shift(-5) / dataframe["close"] - 1
         return dataframe
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -245,26 +204,21 @@ class ichiV1(IStrategy):
         dataframe['trend_open_6h'] = ta.EMA(dataframe['open'], timeperiod=120)
         dataframe['trend_open_8h'] = ta.EMA(dataframe['open'], timeperiod=160)
 
-        # Calculate fan magnitude (KEEPING THE ORIGINAL) with safety checks
-        with np.errstate(divide='ignore', invalid='ignore'):
-            fan_magnitude = dataframe['trend_close_1h'] / dataframe['trend_close_8h']
-            dataframe['fan_magnitude'] = np.where(np.isfinite(fan_magnitude), fan_magnitude, 1.0)
-            
-            fan_magnitude_shifted = dataframe['fan_magnitude'].shift(1)
-            fan_magnitude_gain = dataframe['fan_magnitude'] / fan_magnitude_shifted
-            dataframe['fan_magnitude_gain'] = np.where(np.isfinite(fan_magnitude_gain), fan_magnitude_gain, 1.0)
+        # Calculate fan magnitude (KEEPING THE ORIGINAL)
+        dataframe['fan_magnitude'] = (dataframe['trend_close_1h'] / dataframe['trend_close_8h'])
+        dataframe['fan_magnitude_gain'] = dataframe['fan_magnitude'] / dataframe['fan_magnitude'].shift(1)
 
-        # Calculate Ichimoku indicators (KEEPING THE ORIGINAL) with NaN handling
+        # Calculate Ichimoku indicators (KEEPING THE ORIGINAL)
         ichimoku = ftt.ichimoku(dataframe, conversion_line_period=20, base_line_periods=60, laggin_span=120, displacement=30)
-        dataframe['chikou_span'] = ichimoku['chikou_span'].ffill().bfill()
-        dataframe['tenkan_sen'] = ichimoku['tenkan_sen'].ffill().bfill()
-        dataframe['kijun_sen'] = ichimoku['kijun_sen'].ffill().bfill()
-        dataframe['senkou_a'] = ichimoku['senkou_span_a'].ffill().bfill()
-        dataframe['senkou_b'] = ichimoku['senkou_span_b'].ffill().bfill()
-        dataframe['leading_senkou_span_a'] = ichimoku['leading_senkou_span_a'].ffill().bfill()
-        dataframe['leading_senkou_span_b'] = ichimoku['leading_senkou_span_b'].ffill().bfill()
-        dataframe['cloud_green'] = ichimoku['cloud_green'].fillna(0)
-        dataframe['cloud_red'] = ichimoku['cloud_red'].fillna(0)
+        dataframe['chikou_span'] = ichimoku['chikou_span']
+        dataframe['tenkan_sen'] = ichimoku['tenkan_sen']
+        dataframe['kijun_sen'] = ichimoku['kijun_sen']
+        dataframe['senkou_a'] = ichimoku['senkou_span_a']
+        dataframe['senkou_b'] = ichimoku['senkou_span_b']
+        dataframe['leading_senkou_span_a'] = ichimoku['leading_senkou_span_a']
+        dataframe['leading_senkou_span_b'] = ichimoku['leading_senkou_span_b']
+        dataframe['cloud_green'] = ichimoku['cloud_green']
+        dataframe['cloud_red'] = ichimoku['cloud_red']
 
         # Calculate ATR (KEEPING THE ORIGINAL)
         dataframe['atr'] = ta.ATR(dataframe)

@@ -57,91 +57,151 @@ services:
         --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
         --strategy-path /freqtrade/user_data/strategies
       ports:
+        - "0.0.0.0:8085:8080"
+      networks:
+        - freqnet
+
+    freqtrade_godstra_hyperopt:
+      image: freqtradeorg/freqtrade:stable
+      restart: "no"
+      container_name: freqtrade_godstra_hyperopt
+      entrypoint: /bin/bash
+      volumes:
+        - userdata_godstra:/freqtrade/user_data
+        - ./user_data/config_hyperopt.json:/freqtrade/user_data/config.json
+        - ./user_data/strategies/GodStra.py:/freqtrade/user_data/strategies/GodStra.py
+      command: >
+        -c "pip install ta &&
+        echo 'Setting up GodStra hyperopt environment...' &&
+        mkdir -p /freqtrade/user_data/data/binance &&
+        mkdir -p /freqtrade/user_data/hyperopts &&
+        echo 'Downloading data for hyperopt...' &&
+        freqtrade download-data
+        --config /freqtrade/user_data/config.json
+        --pairs BTC/USDT ETH/USDT BNB/USDT XRP/USDT ADA/USDT SOL/USDT
+        --timerange 20230101-20240601
+        --timeframes 12h
+        --exchange binance
+        --verbose &&
+        echo 'Starting hyperopt optimization...' &&
+        freqtrade hyperopt
+        --hyperopt-loss SharpeHyperOptLoss
+        --spaces buy sell roi stoploss
+        --strategy GodStra
+        --timeframe 12h
+        --timerange 20230101-20240401
+        --epochs 50
+        --random-state 42
+        --print-all &&
+        echo 'Hyperopt completed! Check the results in the logs above.'"
+      networks:
+        - freqnet
+
+      freqtrade_godstra_trading:
+        image: freqtradeorg/freqtrade:stable
+        restart: always
+        container_name: freqtrade_godstra_trading
+        entrypoint: /bin/bash
+        volumes:
+          - userdata_godstra:/freqtrade/user_data
+          - ./user_data/config_hyperopt.json:/freqtrade/user_data/config.json
+          - ./user_data/strategies/GodStra.py:/freqtrade/user_data/strategies/GodStra.py
+        command: >
+          -c "pip install ta &&
+          echo 'Starting GodStra trading bot...' &&
+          echo 'Using optimized parameters from strategy defaults' &&
+          freqtrade trade
+          --config /freqtrade/user_data/config.json
+          --strategy GodStra
+          --db-url sqlite:////freqtrade/user_data/tradesv3_godstra.sqlite
+          --strategy-path /freqtrade/user_data/strategies
+          --verbose"
+        ports:
+          - "0.0.0.0:8084:8080"
+        networks:
+          - freqnet
+
+    freqtrade_OG_Catboost:
+      image: freqtradeorg/freqtrade:stable_freqaitorch
+      restart: always
+      container_name: freqtrade_OG_Catboost
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: 1
+                capabilities: [gpu]
+      volumes:
+        - userdata_OG_Catboost:/freqtrade/user_data
+        - ./user_data/config_freqai.Catboost.json:/freqtrade/user_data/config.json
+        - ./user_data/strategies/FreqaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
+      command: >
+        trade
+        --config /freqtrade/user_data/config.json
+        --strategy FreqaiExampleStrategy
+        --freqaimodel CatboostRegressor
+        --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+        --strategy-path /freqtrade/user_data/strategies
+      ports:
         - "0.0.0.0:8081:8080"
       networks:
         - freqnet
 
-    # freqtrade_OG_Catboost:
-    #   image: freqtradeorg/freqtrade:stable_freqaitorch
-    #   restart: always
-    #   container_name: freqtrade_OG_Catboost
-    #   deploy:
-    #     resources:
-    #       reservations:
-    #         devices:
-    #           - driver: nvidia
-    #             count: 1
-    #             capabilities: [gpu]
-    #   volumes:
-    #     - userdata_OG_Catboost:/freqtrade/user_data
-    #     - ./user_data/config_freqai.Catboost.json:/freqtrade/user_data/config.json
-    #     - ./user_data/strategies/FreqaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
-    #   command: >
-    #     trade
-    #     --config /freqtrade/user_data/config.json
-    #     --strategy FreqaiExampleStrategy
-    #     --freqaimodel CatboostRegressor
-    #     --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-    #     --strategy-path /freqtrade/user_data/strategies
-    #   ports:
-    #     - "0.0.0.0:8081:8080"
-    #   networks:
-    #     - freqnet
+    freqtrade_filterEMA:
+      image: freqtradeorg/freqtrade:stable_freqaitorch
+      restart: always
+      container_name: freqtrade_filterEMA
+      deploy:
+        resources:
+          reservations:
+            devices:
+              - driver: nvidia
+                count: 1
+                capabilities: [gpu]
+      volumes:
+        - userdata_filterEMA:/freqtrade/user_data
+        - ./user_data/config_freqai.FilterEMA.json:/freqtrade/user_data/config.json
+        - ./user_data/strategies/FreqaiExampleStrategy_FilterEMA.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_FilterEMA.py
+      command: >
+        trade
+        --config /freqtrade/user_data/config.json
+        --strategy FreqaiExampleStrategy_FilterEMA
+        --freqaimodel LightGBMRegressor
+        --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+        --strategy-path /freqtrade/user_data/strategies
+      ports:
+        - "0.0.0.0:8082:8080"
+      networks:
+        - freqnet
 
-    # freqtrade_filterEMA:
-    #   image: freqtradeorg/freqtrade:stable_freqaitorch
-    #   restart: always
-    #   container_name: freqtrade_filterEMA
-    #   deploy:
-    #     resources:
-    #       reservations:
-    #         devices:
-    #           - driver: nvidia
-    #             count: 1
-    #             capabilities: [gpu]
-    #   volumes:
-    #     - userdata_filterEMA:/freqtrade/user_data
-    #     - ./user_data/config_freqai.FilterEMA.json:/freqtrade/user_data/config.json
-    #     - ./user_data/strategies/FreqaiExampleStrategy_FilterEMA.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_FilterEMA.py
-    #   command: >
-    #     trade
-    #     --config /freqtrade/user_data/config.json
-    #     --strategy FreqaiExampleStrategy_FilterEMA
-    #     --freqaimodel LightGBMRegressor
-    #     --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-    #     --strategy-path /freqtrade/user_data/strategies
-    #   ports:
-    #     - "0.0.0.0:8082:8080"
-    #   networks:
-    #     - freqnet
+    freqtrade_Classification:
+        image: freqtradeorg/freqtrade:stable_freqaitorch
+        restart: always
+        container_name: freqtrade_Classification
+        deploy:
+          resources:
+            reservations:
+              devices:
+                - driver: nvidia
+                  count: 1
+                  capabilities: [gpu]
+        volumes:
+          - userdata_classification:/freqtrade/user_data
+          - ./user_data/config_freqai.Classification.json:/freqtrade/user_data/config.json
+          - ./user_data/strategies/FreqaiExampleStrategy_Classification.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_Classification.py
 
-    # freqtrade_Classification:
-    #     image: freqtradeorg/freqtrade:stable_freqaitorch
-    #     restart: always
-    #     container_name: freqtrade_Classification
-    #     deploy:
-    #       resources:
-    #         reservations:
-    #           devices:
-    #             - driver: nvidia
-    #               count: 1
-    #               capabilities: [gpu]
-    #     volumes:
-    #       - userdata_classification:/freqtrade/user_data
-    #       - ./user_data/config_freqai.Classification.json:/freqtrade/user_data/config.json
-    #       - ./user_data/strategies/FreqaiExampleStrategy_Classification.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_Classification.py
-
-    #     command: >
-    #       trade
-    #       --config /freqtrade/user_data/config.json
-    #       --strategy FreqaiExampleStrategy_Classification
-    #       --freqaimodel CatboostClassifier
-    #       --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-    #       --strategy-path /freqtrade/user_data/strategies
-    #     ports:
-    #       - "0.0.0.0:8083:8080"
-    #     networks:
-    #       - freqnet
+        command: >
+          trade
+          --config /freqtrade/user_data/config.json
+          --strategy FreqaiExampleStrategy_Classification
+          --freqaimodel CatboostClassifier
+          --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+          --strategy-path /freqtrade/user_data/strategies
+        ports:
+          - "0.0.0.0:8083:8080"
+        networks:
+          - freqnet
 
 networks:
   freqnet:
@@ -153,41 +213,3 @@ volumes:
   userdata_OG_Catboost:
   userdata_filterEMA:
   userdata_classification:
-        
-
-    # tensorboard:
-    #     image: freqtradeorg/freqtrade:stable_freqaitorch
-    #     container_name: tensorboard
-    #     volumes:
-    #       - ./freqtrade/ichiv1/user_data:/freqtrade/user_data
-    #     #network_mode: "host"
-    #     ports:
-    #       - "9060:9060"
-    #     # Default command used when running `docker compose up` --bind_all
-    #     entrypoint: tensorboard
-    #     command: >
-    #       --bind_all
-    #       --port 9060
-    #       --logdir /freqtrade/user_data/models
-
-    # plot:
-    #   image: freqtradeorg/freqtrade:stable_plot
-    #   container_name: freqtrade_plot
-    #   volumes:
-    #     - ./freqtrade/ichiv1/user_data:/freqtrade/user_data
-    #   # Expose api on port 8080 (localhost only)
-    #   # Please read the https://www.freqtrade.io/en/stable/rest-api/ documentation
-    #   # before enabling this.
-    #   ports:
-    #     - "127.0.0.1:8082:8080"
-    #   # Default command used when running `docker compose up`
-    #   command: >
-    #     trade
-    #     --logfile /freqtrade/user_data/logs/freqtrade.log
-    #     --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-    #     --config /freqtrade/user_data/config_freqai.json
-    #     --strategy-path /freqtrade/user_data/strategies
-    #     --strategy ichiv1
-
-
-
