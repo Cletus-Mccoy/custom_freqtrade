@@ -1,0 +1,9 @@
+{
+    "pair_whitelist": [
+        "BTC/USDT:USDT",
+        "ETH/USDT:USDT",
+        "LINK/USDT:USDT",
+        "LTC/USDT:USDT"
+    ],
+    "pair_blacklist": []
+}

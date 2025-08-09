@@ -1,0 +1,715 @@
+{% extends "base.html" %}
+
+{% block title %}Strategies - FreqTrade Manager{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
+            <h1><i class="fas fa-brain"></i> Strategy Management</h1>
+            <div class="d-flex gap-2 w-100 w-md-auto">
+                <!-- View Toggle Buttons - Hide on mobile, show card view by default -->
+                <div class="btn-group btn-group-sm d-none d-lg-flex" role="group">
+                    <input type="radio" class="btn-check" name="strategiesViewMode" id="strategiesCardView" checked>
+                    <label class="btn btn-outline-primary" for="strategiesCardView">
+                        <i class="fas fa-th-large"></i> Cards
+                    </label>
+                    <input type="radio" class="btn-check" name="strategiesViewMode" id="strategiesListView">
+                    <label class="btn btn-outline-primary" for="strategiesListView">
+                        <i class="fas fa-list"></i> List
+                    </label>
+                </div>
+                <!-- Mobile view selector -->
+                <div class="btn-group btn-group-sm d-lg-none w-100" role="group">
+                    <input type="radio" class="btn-check" name="strategiesViewModeMobile" id="strategiesCardViewMobile" checked>
+                    <label class="btn btn-outline-primary flex-fill" for="strategiesCardViewMobile">
+                        <i class="fas fa-th-large"></i> Cards
+                    </label>
+                    <input type="radio" class="btn-check" name="strategiesViewModeMobile" id="strategiesListViewMobile">
+                    <label class="btn btn-outline-primary flex-fill" for="strategiesListViewMobile">
+                        <i class="fas fa-list"></i> List
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action buttons row -->
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-primary flex-fill" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i> <span class="d-none d-sm-inline">Refresh</span>
+                    </button>
+                    <button class="btn btn-success flex-fill" onclick="uploadStrategy()">
+                        <i class="fas fa-upload"></i> <span class="d-none d-sm-inline">Upload Strategy</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Strategy Type Filter -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <!-- Desktop filter buttons -->
+                <div class="btn-group d-none d-md-flex" role="group">
+                    <input type="radio" class="btn-check" name="typeFilter" id="filterAllStrategies" value="all" checked>
+                    <label class="btn btn-outline-primary" for="filterAllStrategies">All</label>
+
+                    <input type="radio" class="btn-check" name="typeFilter" id="filterFreqaiStrategies" value="freqai">
+                    <label class="btn btn-outline-info" for="filterFreqaiStrategies">FreqAI</label>
+
+                    <input type="radio" class="btn-check" name="typeFilter" id="filterCustomStrategies" value="custom">
+                    <label class="btn btn-outline-success" for="filterCustomStrategies">Custom</label>
+
+                    <input type="radio" class="btn-check" name="typeFilter" id="filterExampleStrategies" value="example">
+                    <label class="btn btn-outline-warning" for="filterExampleStrategies">Examples</label>
+
+                    <input type="radio" class="btn-check" name="typeFilter" id="filterTestStrategies" value="test">
+                    <label class="btn btn-outline-secondary" for="filterTestStrategies">Test</label>
+                </div>
+                
+                <!-- Mobile dropdown filter -->
+                <div class="d-md-none">
+                    <select class="form-select" id="typeFilterMobile" onchange="filterStrategiesByType(this.value)">
+                        <option value="all">All Strategies</option>
+                        <option value="freqai">FreqAI Strategies</option>
+                        <option value="custom">Custom Strategies</option>
+                        <option value="example">Example Strategies</option>
+                        <option value="test">Test Strategies</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Strategies Display -->
+<div class="row">
+    <div class="col-12">
+        <!-- Desktop List View -->
+        <div id="strategiesTableContainer" class="d-none">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="strategiesTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Strategy Name</th>
+                                    <th>Type</th>
+                                    <th>Filename</th>
+                                    <th>Modified</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="strategiesTableBody">
+                                <!-- Strategies will be populated here by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card View (Default and Mobile-First) -->
+        <div id="strategiesCardContainer">
+            <div class="row" id="strategiesGrid">
+                {% for strategy in strategies %}
+                <div class="col-12 col-md-6 col-lg-4 mb-3 strategy-card" data-type="{{ strategy.type }}">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 text-truncate" title="{{ strategy.name }}">{{ strategy.name }}</h6>
+                            <span class="badge bg-{{ 'info' if strategy.type == 'freqai' else 'success' if strategy.type == 'custom' else 'warning' if strategy.type == 'example' else 'secondary' }} flex-shrink-0 ms-2">
+                                {{ strategy.type|title }}
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <small class="text-muted">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <i class="fas fa-file-code me-1"></i> 
+                                        <span class="text-truncate" title="{{ strategy.filename }}">{{ strategy.filename }}</span>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-clock me-1"></i> 
+                                        <span class="text-truncate">{{ strategy.modified }}</span>
+                                    </div>
+                                </small>
+                            </div>
+                            
+                            <!-- Mobile-first button layout -->
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary btn-sm" onclick="viewStrategy('{{ strategy.filename }}')">
+                                    <i class="fas fa-eye"></i> View Code
+                                </button>
+                                
+                                <!-- Two columns on mobile, group on desktop -->
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <button class="btn btn-outline-secondary btn-sm w-100" onclick="editStrategy('{{ strategy.filename }}')">
+                                            <i class="fas fa-edit"></i> <span class="d-none d-sm-inline">Edit</span>
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <button class="btn btn-outline-success btn-sm w-100" onclick="copyStrategy('{{ strategy.filename }}')">
+                                            <i class="fas fa-copy"></i> <span class="d-none d-sm-inline">Clone</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <button class="btn btn-outline-info btn-sm w-100" onclick="downloadStrategy('{{ strategy.filename }}')">
+                                            <i class="fas fa-download"></i> <span class="d-none d-sm-inline">Download</span>
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <button class="btn btn-outline-danger btn-sm w-100" onclick="deleteStrategy('{{ strategy.filename }}')">
+                                            <i class="fas fa-trash"></i> <span class="d-none d-sm-inline">Delete</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Strategy Modal -->
+<div class="modal fade" id="viewStrategyModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Strategy Code</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="strategyContent">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="downloadStrategy()">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                <button type="button" class="btn btn-success" onclick="editCurrentStrategy()">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Strategy Modal -->
+<div class="modal fade" id="testStrategyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Test Strategy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="testStrategyForm">
+                    <div class="mb-3">
+                        <label for="testPairlist" class="form-label">Test Pairlist</label>
+                        <select class="form-select" id="testPairlist" required>
+                            <option value="">Select test pairlist...</option>
+                            <option value="test_pairs.json">Test Pairs (Small)</option>
+                            <option value="freqai_core_pairs.json">FreqAI Core Pairs</option>
+                            <option value="common_pairs_futures.json">Common Futures Pairs</option>
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="testTimeframe" class="form-label">Timeframe</label>
+                                <select class="form-select" id="testTimeframe">
+                                    <option value="1m">1 minute</option>
+                                    <option value="3m" selected>3 minutes</option>
+                                    <option value="5m">5 minutes</option>
+                                    <option value="15m">15 minutes</option>
+                                    <option value="1h">1 hour</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="testDays" class="form-label">Test Days</label>
+                                <input type="number" class="form-control" id="testDays" value="7" min="1" max="30">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="testStake" class="form-label">Stake Amount (USDT)</label>
+                        <input type="number" class="form-control" id="testStake" value="100" min="10">
+                    </div>
+                </form>
+                
+                <div id="testResults" style="display: none;">
+                    <hr>
+                    <h6>Test Results:</h6>
+                    <pre id="testOutput" class="bg-dark text-light p-3" style="height: 300px; overflow-y: auto;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="runStrategyTest()" id="runTestBtn">
+                    <i class="fas fa-play"></i> Run Test
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Strategy Modal -->
+<div class="modal fade" id="uploadStrategyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload Strategy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="uploadStrategyForm">
+                    <div class="mb-3">
+                        <label for="strategyFile" class="form-label">Strategy File (.py)</label>
+                        <input type="file" class="form-control" id="strategyFile" accept=".py" required>
+                        <div class="form-text">Select a Python strategy file to upload</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="strategyType" class="form-label">Strategy Type</label>
+                        <select class="form-select" id="strategyType">
+                            <option value="custom">Custom</option>
+                            <option value="freqai">FreqAI</option>
+                            <option value="test">Test</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="uploadStrategyFile()">
+                    <i class="fas fa-upload"></i> Upload
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentStrategyFile = '';
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize view mode toggles
+    initializeStrategiesViewToggle();
+    
+    // Initialize type filters
+    initializeTypeFilters();
+});
+
+function initializeStrategiesViewToggle() {
+    const cardViewRadio = document.getElementById('strategiesCardView');
+    const listViewRadio = document.getElementById('strategiesListView');
+    const cardViewMobileRadio = document.getElementById('strategiesCardViewMobile');
+    const listViewMobileRadio = document.getElementById('strategiesListViewMobile');
+    
+    // Desktop toggles
+    if (cardViewRadio && listViewRadio) {
+        cardViewRadio.addEventListener('change', function() {
+            if (this.checked) {
+                switchToStrategiesCardView();
+                // Sync mobile toggle
+                if (cardViewMobileRadio) cardViewMobileRadio.checked = true;
+            }
+        });
+        
+        listViewRadio.addEventListener('change', function() {
+            if (this.checked) {
+                switchToStrategiesListView();
+                // Sync mobile toggle
+                if (listViewMobileRadio) listViewMobileRadio.checked = true;
+            }
+        });
+    }
+    
+    // Mobile toggles
+    if (cardViewMobileRadio && listViewMobileRadio) {
+        cardViewMobileRadio.addEventListener('change', function() {
+            if (this.checked) {
+                switchToStrategiesCardView();
+                // Sync desktop toggle
+                if (cardViewRadio) cardViewRadio.checked = true;
+            }
+        });
+        
+        listViewMobileRadio.addEventListener('change', function() {
+            if (this.checked) {
+                switchToStrategiesListView();
+                // Sync desktop toggle
+                if (listViewRadio) listViewRadio.checked = true;
+            }
+        });
+    }
+}
+
+function switchToStrategiesCardView() {
+    const cardView = document.getElementById('strategiesCardContainer');
+    const listView = document.getElementById('strategiesTableContainer');
+    
+    if (cardView) cardView.style.display = 'block';
+    if (listView) listView.classList.add('d-none');
+}
+
+function switchToStrategiesListView() {
+    const cardView = document.getElementById('strategiesCardContainer');
+    const listView = document.getElementById('strategiesTableContainer');
+    
+    if (cardView) cardView.style.display = 'none';
+    if (listView) listView.classList.remove('d-none');
+    
+    // Populate table view
+    populateStrategiesTable();
+}
+
+function populateStrategiesTable() {
+    const tableBody = document.getElementById('strategiesTableBody');
+    if (!tableBody) return;
+    
+    // Clear existing content
+    tableBody.innerHTML = '';
+    
+    // Get all strategy cards
+    const strategyCards = document.querySelectorAll('.strategy-card');
+    
+    strategyCards.forEach(card => {
+        const strategyName = card.querySelector('.card-header h6').textContent;
+        const strategyType = card.querySelector('.badge').textContent;
+        const strategyFilename = card.querySelector('.fa-file-code').parentElement.textContent.replace(/.*\s/, '').trim();
+        const strategyModified = card.querySelector('.fa-clock').parentElement.textContent.replace(/.*Modified:\s*/, '').trim();
+        
+        // Extract filename for actions
+        const filename = card.querySelector('[onclick*="viewStrategy"]').getAttribute('onclick').match(/'([^']+)'/)[1];
+        
+        const getBadgeClass = (type) => {
+            switch(type.toLowerCase()) {
+                case 'freqai': return 'info';
+                case 'custom': return 'success';
+                case 'example': return 'warning';
+                default: return 'secondary';
+            }
+        };
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${strategyName}</strong></td>
+            <td><span class="badge bg-${getBadgeClass(strategyType)}">${strategyType}</span></td>
+            <td><code>${filename}</code></td>
+            <td><small>${strategyModified}</small></td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="viewStrategy('${filename}')" title="View">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="editStrategy('${filename}')" title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-success" onclick="copyStrategy('${filename}')" title="Clone">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                    <button class="btn btn-outline-info" onclick="downloadStrategy('${filename}')" title="Download">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="testStrategy('${filename}')" title="Test">
+                        <i class="fas fa-flask"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="deleteStrategy('${filename}')" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+function initializeTypeFilters() {
+    const filterButtons = document.querySelectorAll('input[name="typeFilter"]');
+    filterButtons.forEach(button => {
+        button.addEventListener('change', function() {
+            if (this.checked) {
+                filterStrategiesByType(this.value);
+            }
+        });
+    });
+}
+
+function filterStrategiesByType(type) {
+    const strategyCards = document.querySelectorAll('.strategy-card');
+    const tableRows = document.querySelectorAll('#strategiesTableBody tr');
+    
+    // Filter cards
+    strategyCards.forEach(card => {
+        if (type === 'all' || card.dataset.type === type) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    
+    // Filter table rows
+    tableRows.forEach(row => {
+        const badge = row.querySelector('.badge');
+        if (!badge) return;
+        
+        const rowType = badge.textContent.toLowerCase();
+        if (type === 'all' || rowType === type) {
+            row.style.display = 'table-row';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Type filtering
+document.querySelectorAll('input[name="typeFilter"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        filterStrategies(this.value);
+    });
+});
+
+function filterStrategies(type) {
+    const cards = document.querySelectorAll('.strategy-card');
+    cards.forEach(card => {
+        if (type === 'all' || card.dataset.type === type) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function refreshData() {
+    location.reload();
+}
+
+function viewStrategy(filename) {
+    currentStrategyFile = filename;
+    document.querySelector('#viewStrategyModal .modal-title').textContent = `Strategy: ${filename}`;
+    
+    // For demo purposes, we'll show a placeholder
+    // In a real implementation, you'd fetch the strategy code from the server
+    document.getElementById('strategyContent').innerHTML = `
+        <div class="alert alert-info">
+            <strong>Strategy File:</strong> ${filename}<br>
+            <strong>Note:</strong> This would display the actual strategy code in a real implementation.
+        </div>
+        <pre class="bg-light p-3" style="height: 400px; overflow-y: auto;">
+# FreqTrade Strategy: ${filename}
+# This is a placeholder for the actual strategy code
+
+import numpy as np
+import pandas as pd
+from freqtrade.strategy import IStrategy
+from pandas import DataFrame
+
+class ${filename.replace('.py', '').replace('_', '')}(IStrategy):
+    """
+    Strategy: ${filename}
+    
+    This strategy uses technical indicators to generate buy/sell signals.
+    """
+    
+    # Strategy interface version
+    INTERFACE_VERSION: int = 3
+    
+    # Optimal timeframe for the strategy
+    timeframe = '3m'
+    
+    # ROI table
+    minimal_roi = {
+        "60": 0.01,
+        "30": 0.02,
+        "0": 0.04
+    }
+    
+    # Stoploss
+    stoploss = -0.10
+    
+    # Trailing stop
+    trailing_stop = False
+    
+    def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Add several different TA indicators to the given DataFrame
+        """
+        # Add your indicators here
+        return dataframe
+    
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Based on TA indicators, populates the entry signal for the given dataframe
+        """
+        dataframe.loc[
+            (
+                # Add your entry conditions here
+            ),
+            'enter_long'] = 1
+        
+        return dataframe
+    
+    def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Based on TA indicators, populates the exit signal for the given dataframe
+        """
+        dataframe.loc[
+            (
+                # Add your exit conditions here
+            ),
+            'exit_long'] = 1
+        
+        return dataframe
+        </pre>
+    `;
+    
+    new bootstrap.Modal(document.getElementById('viewStrategyModal')).show();
+}
+
+function editStrategy(filename) {
+    showAlert('info', `Edit functionality for "${filename}" would open a code editor`);
+}
+
+function copyStrategy(filename) {
+    const newName = prompt(`Enter name for the copy of "${filename}":`);
+    if (newName) {
+        showAlert('success', `Strategy "${filename}" would be copied as "${newName}"`);
+    }
+}
+
+function testStrategy(filename) {
+    currentStrategyFile = filename;
+    document.querySelector('#testStrategyModal .modal-title').textContent = `Test: ${filename}`;
+    document.getElementById('testResults').style.display = 'none';
+    
+    new bootstrap.Modal(document.getElementById('testStrategyModal')).show();
+}
+
+function runStrategyTest() {
+    const btn = document.getElementById('runTestBtn');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
+    btn.disabled = true;
+    
+    // Simulate test run
+    setTimeout(() => {
+        document.getElementById('testResults').style.display = 'block';
+        document.getElementById('testOutput').textContent = `
+FreqTrade Strategy Test Results
+==============================
+
+Strategy: ${currentStrategyFile}
+Timeframe: ${document.getElementById('testTimeframe').value}
+Test Days: ${document.getElementById('testDays').value}
+Stake Amount: ${document.getElementById('testStake').value} USDT
+
+Results:
+--------
+Total Trades: 45
+Winning Trades: 28 (62.2%)
+Losing Trades: 17 (37.8%)
+
+Total Profit: 12.5%
+Sharpe Ratio: 1.45
+Max Drawdown: -8.2%
+
+Best Trade: +4.2%
+Worst Trade: -2.1%
+Average Trade: +0.28%
+
+Note: This is a simulated result for demonstration purposes.
+In a real implementation, this would run actual backtesting.
+        `;
+        
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }, 3000);
+}
+
+function deleteStrategy(filename) {
+    if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+        return;
+    }
+    
+    showAlert('info', `Delete functionality for "${filename}" would be implemented here`);
+}
+
+function uploadStrategy() {
+    new bootstrap.Modal(document.getElementById('uploadStrategyModal')).show();
+}
+
+function uploadStrategyFile() {
+    const fileInput = document.getElementById('strategyFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showAlert('danger', 'Please select a strategy file');
+        return;
+    }
+    
+    if (!file.name.endsWith('.py')) {
+        showAlert('danger', 'Please select a Python (.py) file');
+        return;
+    }
+    
+    // Here you would upload the file to the server
+    showAlert('success', `Strategy "${file.name}" would be uploaded`);
+    bootstrap.Modal.getInstance(document.getElementById('uploadStrategyModal')).hide();
+    
+    // Reset form
+    document.getElementById('uploadStrategyForm').reset();
+}
+
+function downloadStrategy() {
+    if (!currentStrategyFile) return;
+    
+    // In a real implementation, you'd download the actual file
+    showAlert('info', `Download functionality for "${currentStrategyFile}" would be implemented here`);
+}
+
+function editCurrentStrategy() {
+    if (!currentStrategyFile) return;
+    
+    bootstrap.Modal.getInstance(document.getElementById('viewStrategyModal')).hide();
+    editStrategy(currentStrategyFile);
+}
+
+function showAlert(type, message) {
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show`;
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+}
+</script>
+{% endblock %}

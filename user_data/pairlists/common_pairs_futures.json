@@ -1,0 +1,20 @@
+{
+    "pair_whitelist": [
+        "BTC/USDT:USDT",
+        "ETH/USDT:USDT",
+        "BNB/USDT:USDT",
+        "XRP/USDT:USDT",
+        "ADA/USDT:USDT",
+        "SOL/USDT:USDT",
+        "DOT/USDT:USDT",
+        "DOGE/USDT:USDT",
+        "LTC/USDT:USDT",
+        "LINK/USDT:USDT",
+        "AVAX/USDT:USDT",
+        "MATIC/USDT:USDT",
+        "UNI/USDT:USDT",
+        "ATOM/USDT:USDT",
+        "FTM/USDT:USDT"
+    ],
+    "pair_blacklist": []
+}

@@ -1,215 +1,128 @@
-services:
-    freqtrade_OG_LightGBM:
-      image: freqtradeorg/freqtrade:stable_freqai
-      restart: always
-      container_name: freqtrade_OG_LightGBM
-      runtime: nvidia
-      environment:
-        - NVIDIA_VISIBLE_DEVICES=all
-        - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
-      volumes:
-        - userdata_OG_LightGBM:/freqtrade/user_data
-        - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json
-        - ./user_data/strategies/FreqaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
-      command: >
-        trade
-        --config /freqtrade/user_data/config.json
-        --strategy FreqaiExampleStrategy
-        --freqaimodel LightGBMRegressor
-        --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-        --strategy-path /freqtrade/user_data/strategies
-      ports:
-        - "0.0.0.0:8080:8080"
-      networks:
-        - freqnet
-
-    freqtrade_OG_LightGBM_Inverted:
-      image: freqtradeorg/freqtrade:stable_freqai
-      restart: always
-      container_name: freqtrade_OG_LightGBM_Inverted
-      runtime: nvidia
-      environment:
-        - NVIDIA_VISIBLE_DEVICES=all
-        - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
-      volumes:
-        - userdata_OG_LightGBM_Inverted:/freqtrade/user_data
-        - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json
-        - ./user_data/strategies/FreqaiExampleStrategy_Inverted.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
-      command: >
-        trade
-        --config /freqtrade/user_data/config.json
-        --strategy FreqaiExampleStrategy
-        --freqaimodel LightGBMRegressor
-        --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-        --strategy-path /freqtrade/user_data/strategies
-      ports:
-        - "0.0.0.0:8085:8080"
-      networks:
-        - freqnet
-
-    freqtrade_godstra_hyperopt:
-      image: freqtradeorg/freqtrade:stable
-      restart: "no"
-      container_name: freqtrade_godstra_hyperopt
-      entrypoint: /bin/bash
-      volumes:
-        - userdata_godstra:/freqtrade/user_data
-        - ./user_data/config_hyperopt.json:/freqtrade/user_data/config.json
-        - ./user_data/strategies/GodStra.py:/freqtrade/user_data/strategies/GodStra.py
-      command: >
-        -c "pip install ta &&
-        echo 'Setting up GodStra hyperopt environment...' &&
-        mkdir -p /freqtrade/user_data/data/binance &&
-        mkdir -p /freqtrade/user_data/hyperopts &&
-        echo 'Downloading data for hyperopt...' &&
-        freqtrade download-data
-        --config /freqtrade/user_data/config.json
-        --pairs BTC/USDT ETH/USDT BNB/USDT XRP/USDT ADA/USDT SOL/USDT
-        --timerange 20230101-20240601
-        --timeframes 12h
-        --exchange binance
-        --verbose &&
-        echo 'Starting hyperopt optimization...' &&
-        freqtrade hyperopt
-        --hyperopt-loss SharpeHyperOptLoss
-        --spaces buy sell roi stoploss
-        --strategy GodStra
-        --timeframe 12h
-        --timerange 20230101-20240401
-        --epochs 50
-        --random-state 42
-        --print-all &&
-        echo 'Hyperopt completed! Check the results in the logs above.'"
-      networks:
-        - freqnet
-
-      freqtrade_godstra_trading:
-        image: freqtradeorg/freqtrade:stable
-        restart: always
-        container_name: freqtrade_godstra_trading
-        entrypoint: /bin/bash
-        volumes:
-          - userdata_godstra:/freqtrade/user_data
-          - ./user_data/config_hyperopt.json:/freqtrade/user_data/config.json
-          - ./user_data/strategies/GodStra.py:/freqtrade/user_data/strategies/GodStra.py
-        command: >
-          -c "pip install ta &&
-          echo 'Starting GodStra trading bot...' &&
-          echo 'Using optimized parameters from strategy defaults' &&
-          freqtrade trade
-          --config /freqtrade/user_data/config.json
-          --strategy GodStra
-          --db-url sqlite:////freqtrade/user_data/tradesv3_godstra.sqlite
-          --strategy-path /freqtrade/user_data/strategies
-          --verbose"
-        ports:
-          - "0.0.0.0:8084:8080"
-        networks:
-          - freqnet
-
-    freqtrade_OG_Catboost:
-      image: freqtradeorg/freqtrade:stable_freqaitorch
-      restart: always
-      container_name: freqtrade_OG_Catboost
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
-      volumes:
-        - userdata_OG_Catboost:/freqtrade/user_data
-        - ./user_data/config_freqai.Catboost.json:/freqtrade/user_data/config.json
-        - ./user_data/strategies/FreqaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
-      command: >
-        trade
-        --config /freqtrade/user_data/config.json
-        --strategy FreqaiExampleStrategy
-        --freqaimodel CatboostRegressor
-        --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-        --strategy-path /freqtrade/user_data/strategies
-      ports:
-        - "0.0.0.0:8081:8080"
-      networks:
-        - freqnet
-
-    freqtrade_filterEMA:
-      image: freqtradeorg/freqtrade:stable_freqaitorch
-      restart: always
-      container_name: freqtrade_filterEMA
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
-      volumes:
-        - userdata_filterEMA:/freqtrade/user_data
-        - ./user_data/config_freqai.FilterEMA.json:/freqtrade/user_data/config.json
-        - ./user_data/strategies/FreqaiExampleStrategy_FilterEMA.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_FilterEMA.py
-      command: >
-        trade
-        --config /freqtrade/user_data/config.json
-        --strategy FreqaiExampleStrategy_FilterEMA
-        --freqaimodel LightGBMRegressor
-        --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-        --strategy-path /freqtrade/user_data/strategies
-      ports:
-        - "0.0.0.0:8082:8080"
-      networks:
-        - freqnet
-
-    freqtrade_Classification:
-        image: freqtradeorg/freqtrade:stable_freqaitorch
-        restart: always
-        container_name: freqtrade_Classification
-        deploy:
-          resources:
-            reservations:
-              devices:
-                - driver: nvidia
-                  count: 1
-                  capabilities: [gpu]
-        volumes:
-          - userdata_classification:/freqtrade/user_data
-          - ./user_data/config_freqai.Classification.json:/freqtrade/user_data/config.json
-          - ./user_data/strategies/FreqaiExampleStrategy_Classification.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_Classification.py
-
-        command: >
-          trade
-          --config /freqtrade/user_data/config.json
-          --strategy FreqaiExampleStrategy_Classification
-          --freqaimodel CatboostClassifier
-          --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-          --strategy-path /freqtrade/user_data/strategies
-        ports:
-          - "0.0.0.0:8083:8080"
-        networks:
-          - freqnet
-
 networks:
   freqnet:
     driver: bridge
+  freqtrade_network:
+    driver: bridge
+services:
+    Test:
+      command:
+      - trade
+      - --config
+      - /freqtrade/user_data/config_Test.json
+      - --strategy-path
+      - /freqtrade/user_data/strategies
+      - --strategy
+      - FreqaiExampleStrategy
+      container_name: Test
+      environment:
+      - FREQTRADE_CONFIG_FILE=/freqtrade/user_data/config_Test.json
+      - FREQTRADE_STRATEGY=FreqaiExampleStrategy
+      - FREQTRADE_PAIRLIST=test_pairs.json
+      image: freqtradeorg/freqtrade:stable
+      networks:
+      - freqtrade_network
+      ports:
+      - 8737:8080
+      restart: unless-stopped
+      volumes:
+      - ./user_data:/freqtrade/user_data
+      - ./ichiv1/user_data:/freqtrade/ichiv1_data:ro
+
+    freqtrade_godstra_hyperopt:
+      command: |
+        -c "pip install ta && echo 'Setting up GodStra hyperopt environment...' && mkdir -p /freqtrade/user_data/data/binance && mkdir -p /freqtrade/user_data/hyperopts && echo 'Downloading data for hyperopt...' && freqtrade download-data --config /freqtrade/user_data/config.json --pairs BTC/USDT ETH/USDT BNB/USDT XRP/USDT ADA/USDT SOL/USDT --timerange 20230101-20240601 --timeframes 12h --exchange binance --verbose && echo 'Starting hyperopt optimization...' && freqtrade hyperopt --hyperopt-loss SharpeHyperOptLoss --spaces buy sell roi stoploss --strategy GodStra --timeframe 12h --timerange 20230101-20240401 --epochs 50 --random-state 42 --print-all && echo 'Hyperopt completed! Check the results in the logs above.'"
+      container_name: freqtrade_godstra_hyperopt
+      entrypoint: /bin/bash
+    freqtrade_godstra_trading:
+      command: |
+        -c "pip install ta && echo 'Starting GodStra trading bot...' && echo 'Using optimized parameters from strategy defaults' && freqtrade trade --config /freqtrade/user_data/config.json --strategy GodStra --db-url sqlite:////freqtrade/user_data/tradesv3_godstra.sqlite --strategy-path /freqtrade/user_data/strategies --verbose"
+      container_name: freqtrade_godstra_trading
+      entrypoint: /bin/bash
+      image: freqtradeorg/freqtrade:stable
+      networks:
+      - freqnet
+      ports:
+      - 0.0.0.0:8084:8080
+      restart: 'no'
+      volumes:
+      - userdata_godstra:/freqtrade/user_data
+      - ./user_data/config_hyperopt.json:/freqtrade/user_data/config.json
+      - ./user_data/strategies/GodStra.py:/freqtrade/user_data/strategies/GodStra.py
+  
+    test1:
+      command:
+      - trade
+      - --config
+      - /freqtrade/user_data/config_test1.json
+      - --strategy-path
+      - /freqtrade/user_data/strategies
+      - --strategy
+      - FreqaiExampleStrategy
+      container_name: test1
+      environment:
+      - FREQTRADE_CONFIG_FILE=/freqtrade/user_data/config_test1.json
+      - FREQTRADE_STRATEGY=FreqaiExampleStrategy
+      - FREQTRADE_PAIRLIST=test_pairs.json
+      image: freqtradeorg/freqtrade:stable
+      networks:
+      - freqtrade_network
+      ports:
+      - 8686:8080
+      restart: unless-stopped
+      volumes:
+      - ./user_data:/freqtrade/user_data
+      - ./ichiv1/user_data:/freqtrade/ichiv1_data:ro
+      test2:
+        command:
+        - trade
+        - --config
+        - /freqtrade/user_data/config_test2.json
+        - --strategy-path
+        - /freqtrade/user_data/strategies
+        - --strategy
+        - FreqaiExampleStrategy
+        container_name: test2
+        environment:
+        - FREQTRADE_CONFIG_FILE=/freqtrade/user_data/config_test2.json
+        - FREQTRADE_STRATEGY=FreqaiExampleStrategy
+        - FREQTRADE_PAIRLIST=test_pairs.json
+        image: freqtradeorg/freqtrade:stable
+        networks:
+        - freqtrade_network
+        ports:
+        - 8687:8080
+        restart: unless-stopped
+        volumes:
+        - ./user_data:/freqtrade/user_data
+        - ./ichiv1/user_data:/freqtrade/ichiv1_data:ro
+
+    test122:
+      image: freqtradeorg/freqtrade:stable
+      container_name: test122
+      restart: unless-stopped
+      volumes:
+      - ./user_data:/freqtrade/user_data
+      - ./ichiv1/user_data:/freqtrade/ichiv1_data:ro
+      command:
+      - trade
+      - --config
+      - /freqtrade/user_data/config_test122.json
+      - --strategy-path
+      - /freqtrade/user_data/strategies
+      - --strategy
+      - FreqaiExampleStrategy
+      environment:
+      - FREQTRADE_CONFIG_FILE=/freqtrade/user_data/config_test122.json
+      - FREQTRADE_STRATEGY=FreqaiExampleStrategy
+      - FREQTRADE_PAIRLIST=test_pairs.json
+      ports:
+      - 8286:8080
+      networks:
+      - freqtrade_network
 
 volumes:
-  userdata_OG_LightGBM:
-  userdata_OG_LightGBM_Inverted:
-  userdata_OG_Catboost:
-  userdata_filterEMA:
-  userdata_classification:
+  userdata_OG_Catboost: null
+  userdata_OG_LightGBM: null
+  userdata_OG_LightGBM_Inverted: null
+  userdata_classification: null
+  userdata_filterEMA: null

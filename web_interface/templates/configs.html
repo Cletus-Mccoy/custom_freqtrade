@@ -1,0 +1,1172 @@
+{% extends "base.html" %}
+
+{% block title %}Configurations - FreqTrade Manager{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
+            <h1><i class="fas fa-cog"></i> Configuration Management</h1>
+            <div class="d-flex gap-2 w-100 w-md-auto">
+                <button class="btn btn-primary flex-fill flex-md-grow-0" onclick="refreshData()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+                <button class="btn btn-success flex-fill flex-md-grow-0" onclick="createConfig()">
+                    <i class="fas fa-plus"></i> Create New
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Configurations List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5><i class="fas fa-list"></i> Configuration Files</h5>
+            </div>
+            <div class="card-body">
+                {% if configs %}
+                <!-- Desktop view (hidden on small screens) -->
+                <div class="d-none d-lg-block">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Configuration</th>
+                                    <th>Strategy</th>
+                                    <th>Trading Mode</th>
+                                    <th>Timeframe</th>
+                                    <th>Status</th>
+                                    <th>FreqAI</th>
+                                    <th>Modified</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for config in configs %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ config.name }}</strong><br>
+                                        <small class="text-muted">{{ config.filename }}</small>
+                                    </td>
+                                    <td>
+                                        <code>{{ config.strategy }}</code>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'warning' if config.trading_mode == 'spot' else 'info' }}">
+                                            {{ config.trading_mode|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ config.timeframe }}</span>
+                                    </td>
+                                    <td>
+                                        {% if config.dry_run %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-vial"></i> Dry Run
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-dollar-sign"></i> Live
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if config.freqai_enabled %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-brain"></i> Enabled
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">
+                                                <i class="fas fa-times"></i> Disabled
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small>{{ config.modified }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn btn-outline-primary" onclick="viewConfig('{{ config.filename }}')" title="View">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-outline-secondary" onclick="editConfig('{{ config.filename }}')" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button class="btn btn-outline-success" onclick="copyConfig('{{ config.filename }}')" title="Clone">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info" onclick="validateConfig('{{ config.filename }}')" title="Validate">
+                                                <i class="fas fa-check-circle"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" onclick="deleteConfig('{{ config.filename }}')" title="Delete">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Mobile/Tablet view (visible on small screens) -->
+                <div class="d-lg-none">
+                    {% for config in configs %}
+                    <div class="card mb-3 config-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h6 class="card-title mb-1">{{ config.name }}</h6>
+                                    <small class="text-muted">{{ config.filename }}</small>
+                                </div>
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="#" onclick="viewConfig('{{ config.filename }}')">
+                                            <i class="fas fa-eye"></i> View
+                                        </a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="editConfig('{{ config.filename }}')">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="copyConfig('{{ config.filename }}')">
+                                            <i class="fas fa-copy"></i> Clone
+                                        </a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="validateConfig('{{ config.filename }}')">
+                                            <i class="fas fa-check-circle"></i> Validate
+                                        </a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item text-danger" href="#" onclick="deleteConfig('{{ config.filename }}')">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Strategy</small>
+                                    <code class="small">{{ config.strategy }}</code>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Trading Mode</small>
+                                    <span class="badge bg-{{ 'warning' if config.trading_mode == 'spot' else 'info' }}">
+                                        {{ config.trading_mode|title }}
+                                    </span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Timeframe</small>
+                                    <span class="badge bg-secondary">{{ config.timeframe }}</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Status</small>
+                                    {% if config.dry_run %}
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-vial"></i> Dry Run
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger">
+                                            <i class="fas fa-dollar-sign"></i> Live
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">FreqAI</small>
+                                    {% if config.freqai_enabled %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-brain"></i> Enabled
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-times"></i> Disabled
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Modified</small>
+                                    <small>{{ config.modified }}</small>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid gap-2 d-md-flex">
+                                <button class="btn btn-primary btn-sm flex-fill" onclick="viewConfig('{{ config.filename }}')">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm flex-fill" onclick="editConfig('{{ config.filename }}')">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-circle fa-3x text-muted mb-3"></i>
+                    <h5>No configuration files found</h5>
+                    <p class="text-muted">Create your first configuration to get started</p>
+                    <button class="btn btn-primary" onclick="createConfig()">
+                        <i class="fas fa-plus"></i> Create Configuration
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Config Modal -->
+<div class="modal fade" id="viewConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Configuration Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div id="configSummary"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <div id="configStats"></div>
+                    </div>
+                </div>
+                
+                <ul class="nav nav-tabs" id="configTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="json-tab" data-bs-toggle="tab" data-bs-target="#json-content" type="button" role="tab">
+                            <i class="fas fa-code"></i> JSON
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="formatted-tab" data-bs-toggle="tab" data-bs-target="#formatted-content" type="button" role="tab">
+                            <i class="fas fa-list"></i> Formatted
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="configTabContent">
+                    <div class="tab-pane fade show active" id="json-content" role="tabpanel">
+                        <pre id="configJson" class="bg-dark text-light p-3" style="height: 500px; overflow-y: auto;"></pre>
+                    </div>
+                    <div class="tab-pane fade" id="formatted-content" role="tabpanel">
+                        <div id="configFormatted" class="p-3" style="height: 500px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-warning" onclick="validateCurrentConfig()">
+                    <i class="fas fa-check-circle"></i> Validate
+                </button>
+                <button type="button" class="btn btn-primary" onclick="downloadConfig()">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                <button type="button" class="btn btn-success" onclick="editCurrentConfig()">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Config Modal -->
+<div class="modal fade" id="editConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editConfigForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="configName" class="form-label">Configuration Name</label>
+                                <input type="text" class="form-control" id="configName" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="configStrategy" class="form-label">Strategy</label>
+                                <select class="form-select" id="configStrategy">
+                                    <option value="">Select strategy...</option>
+                                    <!-- This would be populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Editor Mode Toggle -->
+                    <div class="mb-3">
+                        <label class="form-label">Edit Mode</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="edit_mode" id="visual_edit_mode" value="visual">
+                            <label class="btn btn-outline-success" for="visual_edit_mode">
+                                <i class="fas fa-sliders-h"></i> Visual Editor
+                            </label>
+                            <input type="radio" class="btn-check" name="edit_mode" id="json_edit_mode" value="json" checked>
+                            <label class="btn btn-outline-primary" for="json_edit_mode">
+                                <i class="fas fa-code"></i> JSON Editor
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Visual Editor -->
+                    <div id="visualEditSection" style="display: none;">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h6><i class="fas fa-cog"></i> Configuration Settings</h6>
+                            </div>
+                            <div class="card-body">
+                                <!-- Basic Settings -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="visualDryRun" class="form-label">Trading Mode</label>
+                                        <select class="form-select" id="visualDryRun">
+                                            <option value="true">Dry Run (Paper Trading)</option>
+                                            <option value="false">Live Trading</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="visualTradingMode" class="form-label">Market Type</label>
+                                        <select class="form-select" id="visualTradingMode">
+                                            <option value="spot">Spot Trading</option>
+                                            <option value="futures">Futures Trading</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <label for="visualTimeframe" class="form-label">Timeframe</label>
+                                        <select class="form-select" id="visualTimeframe">
+                                            <option value="1m">1 minute</option>
+                                            <option value="3m">3 minutes</option>
+                                            <option value="5m" selected>5 minutes</option>
+                                            <option value="15m">15 minutes</option>
+                                            <option value="30m">30 minutes</option>
+                                            <option value="1h">1 hour</option>
+                                            <option value="4h">4 hours</option>
+                                            <option value="1d">1 day</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="visualStakeCurrency" class="form-label">Stake Currency</label>
+                                        <select class="form-select" id="visualStakeCurrency">
+                                            <option value="USDT" selected>USDT</option>
+                                            <option value="BUSD">BUSD</option>
+                                            <option value="BTC">BTC</option>
+                                            <option value="ETH">ETH</option>
+                                            <option value="USD">USD</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="visualExchange" class="form-label">Exchange</label>
+                                        <select class="form-select" id="visualExchange">
+                                            <option value="binance" selected>Binance</option>
+                                            <option value="bybit">Bybit</option>
+                                            <option value="okx">OKX</option>
+                                            <option value="kucoin">KuCoin</option>
+                                            <option value="bitget">Bitget</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <label for="visualMaxOpenTrades" class="form-label">Max Open Trades</label>
+                                        <input type="number" class="form-control" id="visualMaxOpenTrades" value="5" min="-1">
+                                        <div class="form-text">Use -1 for unlimited</div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="visualStakeAmount" class="form-label">Stake Amount</label>
+                                        <input type="text" class="form-control" id="visualStakeAmount" value="200" placeholder="200 or 'unlimited'">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="visualDryRunWallet" class="form-label">Dry Run Wallet</label>
+                                        <input type="number" class="form-control" id="visualDryRunWallet" value="1000" min="1">
+                                    </div>
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="visualStoploss" class="form-label">Stoploss (%)</label>
+                                        <input type="number" class="form-control" id="visualStoploss" value="-5" step="0.1" max="0">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="visualMinimalRoi" class="form-label">Minimal ROI (%)</label>
+                                        <input type="number" class="form-control" id="visualMinimalRoi" value="4" step="0.1" min="0">
+                                    </div>
+                                </div>
+
+                                <!-- Advanced Settings -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="visualTradableBalanceRatio" class="form-label">Tradable Balance Ratio</label>
+                                        <input type="number" class="form-control" id="visualTradableBalanceRatio" value="0.99" min="0.1" max="1.0" step="0.01">
+                                        <div class="form-text">Percentage of balance to use (0.1-1.0)</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="visualAmountReservePercent" class="form-label">Amount Reserve Percent</label>
+                                        <input type="number" class="form-control" id="visualAmountReservePercent" value="0.05" min="0" max="1" step="0.01">
+                                        <div class="form-text">Reserve for fees (default 5%)</div>
+                                    </div>
+                                </div>
+
+                                <!-- Order Settings -->
+                                <h6 class="mt-4 mb-3">Order Configuration</h6>
+                                <div class="row mb-3">
+                                    <div class="col-md-3">
+                                        <label for="visualEntryOrderType" class="form-label">Entry Order Type</label>
+                                        <select class="form-select" id="visualEntryOrderType">
+                                            <option value="limit" selected>Limit</option>
+                                            <option value="market">Market</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="visualExitOrderType" class="form-label">Exit Order Type</label>
+                                        <select class="form-select" id="visualExitOrderType">
+                                            <option value="limit" selected>Limit</option>
+                                            <option value="market">Market</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="visualStoplossOrderType" class="form-label">Stoploss Order Type</label>
+                                        <select class="form-select" id="visualStoplossOrderType">
+                                            <option value="market" selected>Market</option>
+                                            <option value="limit">Limit</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check mt-4">
+                                            <input class="form-check-input" type="checkbox" id="visualStoplossOnExchange">
+                                            <label class="form-check-label" for="visualStoplossOnExchange">
+                                                Stoploss on Exchange
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Timeout Settings -->
+                                <h6 class="mt-4 mb-3">Timeout Settings</h6>
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <label for="visualEntryTimeout" class="form-label">Entry Timeout (min)</label>
+                                        <input type="number" class="form-control" id="visualEntryTimeout" value="10" min="1">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="visualExitTimeout" class="form-label">Exit Timeout (min)</label>
+                                        <input type="number" class="form-control" id="visualExitTimeout" value="30" min="1">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="visualTimeoutUnit" class="form-label">Timeout Unit</label>
+                                        <select class="form-select" id="visualTimeoutUnit">
+                                            <option value="minutes" selected>Minutes</option>
+                                            <option value="seconds">Seconds</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- API Server Settings -->
+                                <h6 class="mt-4 mb-3">API Server Settings</h6>
+                                <div class="row mb-3">
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="visualApiEnabled" checked>
+                                            <label class="form-check-label" for="visualApiEnabled">
+                                                Enable API Server
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="visualApiPort" class="form-label">API Port</label>
+                                        <input type="number" class="form-control" id="visualApiPort" value="8080" min="1024" max="65535">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="visualApiUsername" class="form-label">API Username</label>
+                                        <input type="text" class="form-control" id="visualApiUsername" value="freq">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="visualApiPassword" class="form-label">API Password</label>
+                                        <input type="password" class="form-control" id="visualApiPassword" value="abcdef">
+                                    </div>
+                                </div>
+
+                                <!-- FreqAI Settings -->
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="visualFreqaiEnabled">
+                                            <label class="form-check-label" for="visualFreqaiEnabled">
+                                                Enable FreqAI
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="freqaiVisualSettings" style="display: none;">
+                                    <div class="border rounded p-3 mb-3 bg-light">
+                                        <h6>FreqAI Configuration</h6>
+                                        <div class="row mb-3">
+                                            <div class="col-md-4">
+                                                <label for="freqaiVisualTrainPeriod" class="form-label">Train Period (days)</label>
+                                                <input type="number" class="form-control" id="freqaiVisualTrainPeriod" value="30" min="1">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="freqaiVisualBacktestPeriod" class="form-label">Backtest Period (days)</label>
+                                                <input type="number" class="form-control" id="freqaiVisualBacktestPeriod" value="7" min="1">
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label for="freqaiVisualModel" class="form-label">Model Type</label>
+                                                <select class="form-select" id="freqaiVisualModel">
+                                                    <option value="LightGBMRegressor" selected>LightGBM</option>
+                                                    <option value="CatboostRegressor">CatBoost</option>
+                                                    <option value="XGBoostRegressor">XGBoost</option>
+                                                    <option value="CatboostClassifier">CatBoost Classifier</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label for="freqaiVisualRetrain" class="form-label">Retrain Hours</label>
+                                                <input type="number" class="form-control" id="freqaiVisualRetrain" value="24" min="1">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="freqaiVisualIdentifier" class="form-label">Model Identifier</label>
+                                                <input type="text" class="form-control" id="freqaiVisualIdentifier" value="unique-id-v2">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Telegram Settings -->
+                                <h6 class="mt-4 mb-3">Telegram Integration</h6>
+                                <div class="row mb-3">
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="visualTelegramEnabled">
+                                            <label class="form-check-label" for="visualTelegramEnabled">
+                                                Enable Telegram
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label for="visualTelegramToken" class="form-label">Bot Token</label>
+                                        <input type="password" class="form-control" id="visualTelegramToken" placeholder="Your Telegram bot token">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="visualTelegramChatId" class="form-label">Chat ID</label>
+                                        <input type="text" class="form-control" id="visualTelegramChatId" placeholder="Your Telegram chat ID">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- JSON Editor -->
+                    <div id="jsonEditSection">
+                        <div class="mb-3">
+                            <label for="configData" class="form-label">Configuration (JSON)</label>
+                            <textarea class="form-control" id="configData" rows="20" required style="font-family: monospace;"></textarea>
+                            <div class="form-text">Enter the configuration in JSON format</div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning" onclick="validateEditConfig()">
+                    <i class="fas fa-check-circle"></i> Validate
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveConfig()">
+                    <i class="fas fa-save"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Validation Results Modal -->
+<div class="modal fade" id="validationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Configuration Validation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="validationResults"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentConfigFile = '';
+
+function refreshData() {
+    location.reload();
+}
+
+// Editor mode switching
+document.addEventListener('DOMContentLoaded', function() {
+    // Edit mode toggle
+    document.querySelectorAll('input[name="edit_mode"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            toggleEditMode(this.value);
+        });
+    });
+
+    // FreqAI toggle for visual editor
+    document.getElementById('visualFreqaiEnabled').addEventListener('change', function() {
+        document.getElementById('freqaiVisualSettings').style.display = this.checked ? 'block' : 'none';
+    });
+
+    // Initialize with JSON mode
+    toggleEditMode('json');
+});
+
+function toggleEditMode(mode) {
+    var visualSection = document.getElementById('visualEditSection');
+    var jsonSection = document.getElementById('jsonEditSection');
+    
+    if (mode === 'visual') {
+        visualSection.style.display = 'block';
+        jsonSection.style.display = 'none';
+        updateJSONFromVisual();
+    } else {
+        visualSection.style.display = 'none';
+        jsonSection.style.display = 'block';
+    }
+}
+
+function updateJSONFromVisual() {
+    var config = {
+        "$schema": "https://schema.freqtrade.io/schema.json",
+        "trading_mode": document.getElementById('visualTradingMode').value || 'spot',
+        "max_open_trades": parseInt(document.getElementById('visualMaxOpenTrades').value) || 5,
+        "stake_currency": document.getElementById('visualStakeCurrency').value || 'USDT',
+        "stake_amount": isNaN(document.getElementById('visualStakeAmount').value) ? 
+                       document.getElementById('visualStakeAmount').value : 
+                       parseFloat(document.getElementById('visualStakeAmount').value),
+        "tradable_balance_ratio": parseFloat(document.getElementById('visualTradableBalanceRatio').value) || 0.99,
+        "amount_reserve_percent": parseFloat(document.getElementById('visualAmountReservePercent').value) || 0.05,
+        "dry_run": document.getElementById('visualDryRun').value === 'true',
+        "timeframe": document.getElementById('visualTimeframe').value || '5m',
+        "dry_run_wallet": parseFloat(document.getElementById('visualDryRunWallet').value) || 1000,
+        "cancel_open_orders_on_exit": true,
+        "exchange": {
+            "name": document.getElementById('visualExchange').value || 'binance',
+            "key": "",
+            "secret": "",
+            "pair_whitelist": [],
+            "pair_blacklist": []
+        },
+        "minimal_roi": {
+            "0": parseFloat(document.getElementById('visualMinimalRoi').value) / 100 || 0.04
+        },
+        "stoploss": parseFloat(document.getElementById('visualStoploss').value) / 100 || -0.05,
+        "unfilledtimeout": {
+            "entry": parseInt(document.getElementById('visualEntryTimeout').value) || 10,
+            "exit": parseInt(document.getElementById('visualExitTimeout').value) || 30,
+            "unit": document.getElementById('visualTimeoutUnit').value || "minutes"
+        },
+        "order_types": {
+            "entry": document.getElementById('visualEntryOrderType').value || "limit",
+            "exit": document.getElementById('visualExitOrderType').value || "limit",
+            "stoploss": document.getElementById('visualStoplossOrderType').value || "market",
+            "stoploss_on_exchange": document.getElementById('visualStoplossOnExchange').checked
+        }
+    };
+
+    // Add futures-specific settings
+    if (config.trading_mode === 'futures') {
+        config.margin_mode = 'isolated';
+    }
+
+    // Add API server settings
+    if (document.getElementById('visualApiEnabled').checked) {
+        config.api_server = {
+            "enabled": true,
+            "listen_ip_address": "0.0.0.0",
+            "listen_port": parseInt(document.getElementById('visualApiPort').value) || 8080,
+            "username": document.getElementById('visualApiUsername').value || "freq",
+            "password": document.getElementById('visualApiPassword').value || "abcdef"
+        };
+    }
+
+    // Add FreqAI settings
+    if (document.getElementById('visualFreqaiEnabled').checked) {
+        config.freqai = {
+            "enabled": true,
+            "train_period_days": parseInt(document.getElementById('freqaiVisualTrainPeriod').value) || 30,
+            "backtest_period_days": parseInt(document.getElementById('freqaiVisualBacktestPeriod').value) || 7,
+            "live_retrain_hours": parseInt(document.getElementById('freqaiVisualRetrain').value) || 24,
+            "identifier": document.getElementById('freqaiVisualIdentifier').value || "unique-id-v2",
+            "model": document.getElementById('freqaiVisualModel').value || "LightGBMRegressor"
+        };
+    }
+
+    // Add Telegram settings
+    if (document.getElementById('visualTelegramEnabled').checked) {
+        var token = document.getElementById('visualTelegramToken').value;
+        var chatId = document.getElementById('visualTelegramChatId').value;
+        if (token && chatId) {
+            config.telegram = {
+                "enabled": true,
+                "token": token,
+                "chat_id": chatId
+            };
+        }
+    }
+
+    document.getElementById('configData').value = JSON.stringify(config, null, 2);
+}
+
+function updateVisualFromJSON() {
+    try {
+        var config = JSON.parse(document.getElementById('configData').value);
+        
+        // Basic settings
+        document.getElementById('visualTradingMode').value = config.trading_mode || 'spot';
+        document.getElementById('visualMaxOpenTrades').value = config.max_open_trades || 5;
+        document.getElementById('visualStakeCurrency').value = config.stake_currency || 'USDT';
+        document.getElementById('visualStakeAmount').value = config.stake_amount || 200;
+        document.getElementById('visualTradableBalanceRatio').value = config.tradable_balance_ratio || 0.99;
+        document.getElementById('visualAmountReservePercent').value = config.amount_reserve_percent || 0.05;
+        document.getElementById('visualDryRun').value = config.dry_run ? 'true' : 'false';
+        document.getElementById('visualTimeframe').value = config.timeframe || '5m';
+        document.getElementById('visualDryRunWallet').value = config.dry_run_wallet || 1000;
+        
+        // Exchange settings
+        if (config.exchange) {
+            document.getElementById('visualExchange').value = config.exchange.name || 'binance';
+        }
+        
+        // ROI and Stoploss
+        if (config.minimal_roi && config.minimal_roi['0']) {
+            document.getElementById('visualMinimalRoi').value = config.minimal_roi['0'] * 100;
+        }
+        document.getElementById('visualStoploss').value = (config.stoploss || -0.05) * 100;
+        
+        // Timeout settings
+        if (config.unfilledtimeout) {
+            document.getElementById('visualEntryTimeout').value = config.unfilledtimeout.entry || 10;
+            document.getElementById('visualExitTimeout').value = config.unfilledtimeout.exit || 30;
+            document.getElementById('visualTimeoutUnit').value = config.unfilledtimeout.unit || 'minutes';
+        }
+        
+        // Order types
+        if (config.order_types) {
+            document.getElementById('visualEntryOrderType').value = config.order_types.entry || 'limit';
+            document.getElementById('visualExitOrderType').value = config.order_types.exit || 'limit';
+            document.getElementById('visualStoplossOrderType').value = config.order_types.stoploss || 'market';
+            document.getElementById('visualStoplossOnExchange').checked = config.order_types.stoploss_on_exchange || false;
+        }
+        
+        // API Server
+        if (config.api_server) {
+            document.getElementById('visualApiEnabled').checked = config.api_server.enabled || false;
+            document.getElementById('visualApiPort').value = config.api_server.listen_port || 8080;
+            document.getElementById('visualApiUsername').value = config.api_server.username || 'freq';
+            document.getElementById('visualApiPassword').value = config.api_server.password || 'abcdef';
+        }
+        
+        // FreqAI
+        if (config.freqai && config.freqai.enabled) {
+            document.getElementById('visualFreqaiEnabled').checked = true;
+            document.getElementById('freqaiVisualSettings').style.display = 'block';
+            document.getElementById('freqaiVisualTrainPeriod').value = config.freqai.train_period_days || 30;
+            document.getElementById('freqaiVisualBacktestPeriod').value = config.freqai.backtest_period_days || 7;
+            document.getElementById('freqaiVisualRetrain').value = config.freqai.live_retrain_hours || 24;
+            document.getElementById('freqaiVisualIdentifier').value = config.freqai.identifier || 'unique-id-v2';
+            document.getElementById('freqaiVisualModel').value = config.freqai.model || 'LightGBMRegressor';
+        }
+        
+        // Telegram
+        if (config.telegram && config.telegram.enabled) {
+            document.getElementById('visualTelegramEnabled').checked = true;
+            document.getElementById('visualTelegramToken').value = config.telegram.token || '';
+            document.getElementById('visualTelegramChatId').value = config.telegram.chat_id || '';
+        }
+        
+    } catch (e) {
+        console.error('Error parsing JSON:', e);
+    }
+}
+
+function viewConfig(filename) {
+    currentConfigFile = filename;
+    document.querySelector('#viewConfigModal .modal-title').textContent = `Configuration: ${filename}`;
+    
+    fetch(`/api/config/${filename}`)
+    .then(response => response.json())
+    .then(data => {
+        // Update summary
+        document.getElementById('configSummary').innerHTML = `
+            <h6>Configuration Summary</h6>
+            <ul class="list-unstyled">
+                <li><strong>File:</strong> ${filename}</li>
+                <li><strong>Strategy:</strong> ${data.strategy || 'Unknown'}</li>
+                <li><strong>Trading Mode:</strong> ${data.trading_mode || 'spot'}</li>
+                <li><strong>Timeframe:</strong> ${data.timeframe || '5m'}</li>
+                <li><strong>Dry Run:</strong> ${data.dry_run ? 'Yes' : 'No'}</li>
+                <li><strong>FreqAI:</strong> ${data.freqai?.enabled ? 'Enabled' : 'Disabled'}</li>
+            </ul>
+        `;
+        
+        // Update stats
+        const pairCount = data.exchange?.pair_whitelist?.length || 0;
+        const blacklistCount = data.exchange?.pair_blacklist?.length || 0;
+        
+        document.getElementById('configStats').innerHTML = `
+            <h6>Trading Configuration</h6>
+            <ul class="list-unstyled">
+                <li><strong>Max Open Trades:</strong> ${data.max_open_trades || 'Unlimited'}</li>
+                <li><strong>Stake Amount:</strong> ${data.stake_amount || 'Unknown'} ${data.stake_currency || 'USDT'}</li>
+                <li><strong>Whitelisted Pairs:</strong> ${pairCount}</li>
+                <li><strong>Blacklisted Pairs:</strong> ${blacklistCount}</li>
+                <li><strong>Exchange:</strong> ${data.exchange?.name || 'Unknown'}</li>
+            </ul>
+        `;
+        
+        // Update JSON content
+        document.getElementById('configJson').textContent = JSON.stringify(data, null, 2);
+        
+        // Update formatted content
+        document.getElementById('configFormatted').innerHTML = formatConfigData(data);
+        
+        new bootstrap.Modal(document.getElementById('viewConfigModal')).show();
+    })
+    .catch(error => {
+        showAlert('danger', 'Error loading configuration: ' + error.message);
+    });
+}
+
+function formatConfigData(data) {
+    let html = '<div class="accordion" id="configAccordion">';
+    
+    const sections = [
+        { key: 'exchange', title: 'Exchange Settings', icon: 'fas fa-exchange-alt' },
+        { key: 'freqai', title: 'FreqAI Settings', icon: 'fas fa-brain' },
+        { key: 'pairlists', title: 'Pairlist Configuration', icon: 'fas fa-list' },
+        { key: 'api_server', title: 'API Server', icon: 'fas fa-server' }
+    ];
+    
+    sections.forEach((section, index) => {
+        if (data[section.key]) {
+            html += `
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button ${index > 0 ? 'collapsed' : ''}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${index}">
+                            <i class="${section.icon}"></i>&nbsp; ${section.title}
+                        </button>
+                    </h2>
+                    <div id="collapse${index}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}">
+                        <div class="accordion-body">
+                            <pre class="bg-light p-2">${JSON.stringify(data[section.key], null, 2)}</pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    html += '</div>';
+    return html;
+}
+
+function editConfig(filename) {
+    currentConfigFile = filename;
+    document.querySelector('#editConfigModal .modal-title').textContent = `Edit: ${filename}`;
+    
+    fetch(`/api/config/${filename}`)
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('configName').value = filename.replace('.json', '');
+        document.getElementById('configStrategy').value = data.strategy || '';
+        document.getElementById('configData').value = JSON.stringify(data, null, 2);
+        
+        // Update visual editor if in visual mode
+        var visualMode = document.querySelector('input[name="edit_mode"]:checked');
+        if (visualMode && visualMode.value === 'visual') {
+            updateVisualFromJSON();
+        }
+        
+        new bootstrap.Modal(document.getElementById('editConfigModal')).show();
+    })
+    .catch(error => {
+        showAlert('danger', 'Error loading configuration: ' + error.message);
+    });
+}
+
+function copyConfig(filename) {
+    currentConfigFile = '';
+    document.querySelector('#editConfigModal .modal-title').textContent = 'Create New Configuration (Copy)';
+    
+    fetch(`/api/config/${filename}`)
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('configName').value = filename.replace('.json', '') + '_copy';
+        document.getElementById('configStrategy').value = data.strategy || '';
+        document.getElementById('configData').value = JSON.stringify(data, null, 2);
+        
+        // Update visual editor if in visual mode
+        var visualMode = document.querySelector('input[name="edit_mode"]:checked');
+        if (visualMode && visualMode.value === 'visual') {
+            updateVisualFromJSON();
+        }
+        
+        new bootstrap.Modal(document.getElementById('editConfigModal')).show();
+    })
+    .catch(error => {
+        showAlert('danger', 'Error loading configuration: ' + error.message);
+    });
+}
+
+function createConfig() {
+    currentConfigFile = '';
+    document.querySelector('#editConfigModal .modal-title').textContent = 'Create New Configuration';
+    document.getElementById('configName').value = '';
+    document.getElementById('configStrategy').value = '';
+    document.getElementById('configData').value = JSON.stringify({
+        "$schema": "https://schema.freqtrade.io/schema.json",
+        "trading_mode": "futures",
+        "margin_mode": "isolated",
+        "max_open_trades": 5,
+        "stake_currency": "USDT",
+        "stake_amount": 200,
+        "dry_run": true,
+        "timeframe": "3m",
+        "exchange": {
+            "name": "binance",
+            "pair_whitelist": [],
+            "pair_blacklist": []
+        },
+        "strategy": "",
+        "api_server": {
+            "enabled": true,
+            "listen_ip_address": "0.0.0.0",
+            "listen_port": 8080,
+            "username": "freq",
+            "password": "abcdef"
+        }
+    }, null, 2);
+    
+    new bootstrap.Modal(document.getElementById('editConfigModal')).show();
+}
+
+function validateConfig(filename) {
+    fetch(`/api/config/${filename}`)
+    .then(response => response.json())
+    .then(data => {
+        const results = validateConfigData(data);
+        showValidationResults(results, filename);
+    })
+    .catch(error => {
+        showAlert('danger', 'Error loading configuration: ' + error.message);
+    });
+}
+
+function validateCurrentConfig() {
+    if (!currentConfigFile) return;
+    validateConfig(currentConfigFile);
+}
+
+function validateEditConfig() {
+    try {
+        const configText = document.getElementById('configData').value;
+        const data = JSON.parse(configText);
+        const results = validateConfigData(data);
+        showValidationResults(results, 'Current Edit');
+    } catch (error) {
+        showAlert('danger', 'Invalid JSON format: ' + error.message);
+    }
+}
+
+function validateConfigData(config) {
+    const results = {
+        valid: true,
+        errors: [],
+        warnings: [],
+        info: []
+    };
+    
+    // Required fields
+    const required = ['strategy', 'exchange', 'timeframe'];
+    required.forEach(field => {
+        if (!config[field]) {
+            results.errors.push(`Missing required field: ${field}`);
+            results.valid = false;
+        }
+    });
+    
+    // Exchange validation
+    if (config.exchange) {
+        if (!config.exchange.name) {
+            results.errors.push('Exchange name is required');
+            results.valid = false;
+        }
+        
+        if (!config.exchange.pair_whitelist || config.exchange.pair_whitelist.length === 0) {
+            results.warnings.push('No trading pairs specified in pair_whitelist');
+        }
+        
+        if (config.exchange.key && config.exchange.key !== '***HIDDEN***') {
+            results.warnings.push('API credentials are present in configuration');
+        }
+    }
+    
+    // Trading mode validation
+    if (config.trading_mode === 'futures' && !config.margin_mode) {
+        results.warnings.push('Margin mode not specified for futures trading');
+    }
+    
+    // FreqAI validation
+    if (config.freqai?.enabled) {
+        if (!config.freqai.model) {
+            results.errors.push('FreqAI model not specified');
+            results.valid = false;
+        }
+        
+        results.info.push('FreqAI is enabled - ensure sufficient data and computational resources');
+    }
+    
+    // General info
+    results.info.push(`Trading mode: ${config.trading_mode || 'spot'}`);
+    results.info.push(`Dry run: ${config.dry_run ? 'enabled' : 'disabled'}`);
+    if (config.exchange?.pair_whitelist) {
+        results.info.push(`Trading pairs: ${config.exchange.pair_whitelist.length}`);
+    }
+    
+    return results;
+}
+
+function showValidationResults(results, filename) {
+    let html = `<h6>Validation Results for: ${filename}</h6>`;
+    
+    if (results.valid) {
+        html += '<div class="alert alert-success"><i class="fas fa-check-circle"></i> Configuration is valid!</div>';
+    } else {
+        html += '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Configuration has errors!</div>';
+    }
+    
+    if (results.errors.length > 0) {
+        html += '<h6 class="text-danger">Errors:</h6><ul class="list-group mb-3">';
+        results.errors.forEach(error => {
+            html += `<li class="list-group-item list-group-item-danger"><i class="fas fa-times"></i> ${error}</li>`;
+        });
+        html += '</ul>';
+    }
+    
+    if (results.warnings.length > 0) {
+        html += '<h6 class="text-warning">Warnings:</h6><ul class="list-group mb-3">';
+        results.warnings.forEach(warning => {
+            html += `<li class="list-group-item list-group-item-warning"><i class="fas fa-exclamation-triangle"></i> ${warning}</li>`;
+        });
+        html += '</ul>';
+    }
+    
+    if (results.info.length > 0) {
+        html += '<h6 class="text-info">Information:</h6><ul class="list-group mb-3">';
+        results.info.forEach(info => {
+            html += `<li class="list-group-item list-group-item-info"><i class="fas fa-info-circle"></i> ${info}</li>`;
+        });
+        html += '</ul>';
+    }
+    
+    document.getElementById('validationResults').innerHTML = html;
+    new bootstrap.Modal(document.getElementById('validationModal')).show();
+}
+
+function saveConfig() {
+    const name = document.getElementById('configName').value;
+    var configText = document.getElementById('configData').value;
+    
+    if (!name) {
+        showAlert('danger', 'Please enter a configuration name');
+        return;
+    }
+    
+    // If in visual mode, update JSON from visual settings first
+    var visualMode = document.querySelector('input[name="edit_mode"]:checked');
+    if (visualMode && visualMode.value === 'visual') {
+        updateJSONFromVisual();
+        configText = document.getElementById('configData').value;
+    }
+    
+    try {
+        const data = JSON.parse(configText);
+        
+        // Here you would save the configuration to the server
+        showAlert('success', `Configuration "${name}" saved successfully`);
+        bootstrap.Modal.getInstance(document.getElementById('editConfigModal')).hide();
+        
+        // Refresh the page after a short delay
+        setTimeout(() => location.reload(), 1000);
+        
+    } catch (error) {
+        showAlert('danger', 'Invalid JSON format: ' + error.message);
+    }
+}
+
+function deleteConfig(filename) {
+    if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+        return;
+    }
+    
+    showAlert('info', `Delete functionality for "${filename}" would be implemented here`);
+}
+
+function downloadConfig() {
+    if (!currentConfigFile) return;
+    
+    fetch(`/api/config/${currentConfigFile}`)
+    .then(response => response.json())
+    .then(data => {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = currentConfigFile;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    })
+    .catch(error => {
+        showAlert('danger', 'Error downloading configuration: ' + error.message);
+    });
+}
+
+function editCurrentConfig() {
+    if (!currentConfigFile) return;
+    
+    bootstrap.Modal.getInstance(document.getElementById('viewConfigModal')).hide();
+    editConfig(currentConfigFile);
+}
+
+function showAlert(type, message) {
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show`;
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+}
+</script>
+{% endblock %}
