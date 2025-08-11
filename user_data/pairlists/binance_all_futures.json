@@ -134,6 +134,5 @@
         "ZEN/USDT:USDT",
         "ZIL/USDT:USDT",
         "ZRX/USDT:USDT"
-    ],
-    "pair_blacklist": []
+    ]
 }

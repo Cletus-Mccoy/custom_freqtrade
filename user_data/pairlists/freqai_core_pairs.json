@@ -6,6 +6,5 @@
         "XRP/USDT:USDT",
         "ADA/USDT:USDT",
         "SOL/USDT:USDT"
-    ],
-    "pair_blacklist": []
+    ]
 }

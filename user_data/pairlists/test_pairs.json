@@ -5,5 +5,5 @@
         "LINK/USDT:USDT",
         "LTC/USDT:USDT"
     ],
-    "pair_blacklist": []
+    "category": "custom"
 }

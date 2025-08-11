@@ -1,3 +1,94 @@
+/* Ensure drag handle is visible and styled */
+.drag-handle {
+    cursor: grab;
+    color: #888;
+    font-size: 1.2em;
+    user-select: none;
+    opacity: 1;
+    margin-right: 0.5rem;
+}
+.sortable-category-item.dragging {
+    opacity: 0.6;
+}
+/* Consistent row height for all main tables */
+.pairlist-row,
+.strategy-row {
+    height: 44px;
+}
+
+/* Consistent action button sizing for pairlist and strategy tables */
+.pairlist-action-btn,
+.strategy-action-btn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0.25rem 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+/* Pairlist/Config action buttons: always white text and border, colored fill on hover */
+.pairlist-action-btn {
+    border: 1.5px solid #fff !important;
+    color: #fff !important;
+    background: transparent !important;
+    transition: background 0.2s, color 0.2s;
+}
+.pairlist-action-btn.btn-outline-primary:hover,
+.pairlist-action-btn.btn-outline-primary:focus {
+    background-color: #0d6efd !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+.pairlist-action-btn.btn-outline-success:hover,
+.pairlist-action-btn.btn-outline-success:focus {
+    background-color: #198754 !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+.pairlist-action-btn.btn-outline-info:hover,
+.pairlist-action-btn.btn-outline-info:focus {
+    background-color: #0dcaf0 !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+/* Strategy tab quick action buttons: always white text and border, colored fill on hover */
+.strategy-action-btn {
+    color: #fff !important;
+    border: 1.5px solid #fff !important;
+    background: transparent !important;
+    transition: background 0.2s, color 0.2s;
+}
+.strategy-action-btn.btn-outline-primary:hover,
+.strategy-action-btn.btn-outline-primary:focus {
+    background-color: var(--primary-color) !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+.strategy-action-btn.btn-outline-success:hover,
+.strategy-action-btn.btn-outline-success:focus {
+    background-color: var(--success-color) !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+.strategy-action-btn.btn-outline-info:hover,
+.strategy-action-btn.btn-outline-info:focus {
+    background-color: var(--info-color) !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+/* Ensure dropdowns in config cards are visible above other content */
+.config-card .dropdown-menu {
+    z-index: 2000;
+}
+.config-card .dropdown {
+    position: static;
+}
+
+/* Remove overflow:hidden from config-card if present (precaution) */
+.config-card, .config-card .card-body {
+    overflow: visible !important;
+}
 /* FreqTrade Web Interface Custom Styles */
 
 :root {

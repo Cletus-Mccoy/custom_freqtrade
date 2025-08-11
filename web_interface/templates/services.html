@@ -1,38 +1,69 @@
+
+{# Defensive: ensure 'services' is always a dict #}
+{% set services = services if services is defined and services is mapping else {} %}
 {% extends "base.html" %}
 
-{% block title %}Docker Services Management{% endblock %}
 
 {% block content %}
+<div id="config-issues-header" class="alert alert-warning py-1 px-3 mb-0 d-flex align-items-center justify-content-center w-100" style="display: none; position: relative; z-index: 1050; text-align: center;">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    <span id="config-issues-message">Configuration issues detected. Please review your settings.</span>
+</div>
+<style>
+    .pairlist-action-btn {
+        border: 1.5px solid #fff !important;
+        color: #fff !important;
+        background: transparent !important;
+        transition: background 0.2s, color 0.2s;
+    }
+    .pairlist-action-btn.btn-outline-primary:hover,
+    .pairlist-action-btn.btn-outline-primary:focus {
+        background-color: #0d6efd !important;
+        color: #fff !important;
+        border-color: #fff !important;
+    }
+    .pairlist-action-btn.btn-outline-success:hover,
+    .pairlist-action-btn.btn-outline-success:focus {
+        background-color: #198754 !important;
+        color: #fff !important;
+        border-color: #fff !important;
+    }
+    .pairlist-action-btn.btn-outline-warning:hover,
+    .pairlist-action-btn.btn-outline-warning:focus {
+        background-color: #ffc107 !important;
+        color: #fff !important;
+        border-color: #fff !important;
+    }
+    .pairlist-action-btn.btn-outline-secondary:hover,
+    .pairlist-action-btn.btn-outline-secondary:focus {
+        background-color: #6c757d !important;
+        color: #fff !important;
+        border-color: #fff !important;
+    }
+</style>
 <div class="container-fluid mt-4">
-    <!-- Quick Actions Bar -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <h4 class="mb-0"><i class="fas fa-layer-group"></i> Docker Stack Management</h4>
-                <div class="btn-group btn-group-sm">
-                    <button type="button" class="btn btn-outline-success" onclick="startAllContainers()">
-                        <i class="fas fa-play"></i> Start All
-                    </button>
-                    <button type="button" class="btn btn-outline-warning" onclick="restartAllContainers()">
-                        <i class="fas fa-redo"></i> Restart All
-                    </button>
-                    <button type="button" class="btn btn-outline-primary" onclick="reloadConfig()">
-                        <i class="fas fa-sync"></i> Reload Config
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="openStackModal()">
-                        <i class="fas fa-edit"></i> Edit Stack
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Unified Docker Stack Management -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-cog"></i> Configuration</h5>
+                <!-- Docker Stack Management header moved out of card to avoid referencing 'service' outside loop -->
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <h4 class="mb-0"><i class="fas fa-layer-group"></i> Docker Stack Management</h4>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-success pairlist-action-btn" onclick="startAllContainers(); restartAllContainers();">
+                            <i class="fas fa-play"></i> Start/Restart All
+                        </button>
+                        <button type="button" class="btn btn-outline-primary pairlist-action-btn" onclick="reloadConfig()">
+                            <i class="fas fa-sync"></i> Reload Compose
+                        </button>
+                        <button type="button" class="btn btn-outline-success pairlist-action-btn" data-bs-toggle="modal" data-bs-target="#createServiceModal">
+                            <i class="fas fa-plus"></i> Create Service
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary pairlist-action-btn" onclick="openStackModal()">
+                            <i class="fas fa-eye"></i> Edit Stack
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="card-body">
@@ -40,7 +71,7 @@
                     <ul class="nav nav-tabs mb-3" id="configTabs" role="tablist">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active" id="services-tab" data-bs-toggle="tab" data-bs-target="#services-content" type="button" role="tab">
-                                <i class="fas fa-cubes"></i> Services
+                                <i class="fas fa-layer-group"></i> View/Edit
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
@@ -49,196 +80,383 @@
                             </button>
                         </li>
                     </ul>
-
-                    <!-- Tab Content -->
                     <div class="tab-content" id="configTabContent">
-                        <!-- Services Tab -->
                         <div class="tab-pane fade show active" id="services-content" role="tabpanel">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h6 class="mb-0">Services Overview</h6>
-                                <button class="btn btn-success btn-sm" onclick="showAddServiceModal()">
-                                    <i class="fas fa-plus"></i> Add Service
-                                </button>
-                            </div>
-                    
-                            <!-- Services Container -->
-                            <div id="servicesContainer">
-                                <!-- Card View for all screen sizes -->
-                                <div id="servicesCardContainer">
-                                    <div class="row" id="servicesCardContent">
-                                        {% if services %}
-                                            {% for service_name, service in services.items() %}
-                                            <div class="col-12 col-lg-6 mb-3">
-                                                <div class="card h-100 service-card {{ 'running' if service.status == 'running' else 'stopped' if service.status == 'stopped' else '' }} d-flex flex-column">
-                                                    <div class="card-header d-flex justify-content-between align-items-center">
-                                                        <h6 class="mb-0">
-                                                            <i class="fas fa-cube me-2"></i>{{ service_name }}
-                                                        </h6>
-                                                        {% set status_color = 'warning' %}
-                                                        {% set status_icon = 'pause' %}
-                                                        {% set button_text = 'Create' %}
-                                                        {% set button_action = 'createService' %}
-                                                        {% set button_icon = 'plus' %}
-                                                        {% if service.status == 'running' %}
-                                                            {% set status_color = 'success' %}
-                                                            {% set status_icon = 'play' %}
-                                                            {% set button_text = 'Restart' %}
-                                                            {% set button_action = 'restartService' %}
-                                                            {% set button_icon = 'redo' %}
-                                                        {% elif service.status == 'stopped' or service.status == 'created' or service.status == 'exited' %}
-                                                            {% set status_color = 'danger' if service.status == 'stopped' else 'warning' %}
-                                                            {% set status_icon = 'stop' if service.status == 'stopped' else 'pause' %}
-                                                            {% set button_text = 'Start' %}
-                                                            {% set button_action = 'startService' %}
-                                                            {% set button_icon = 'play' %}
-                                                        {% endif %}
-                                                        <span class="badge bg-{{ status_color }}">
-                                                            <i class="fas fa-{{ status_icon }}"></i> {{ service.status or 'Not Created' }}
-                                                        </span>
-                                                    </div>
-                                                    <div class="card-body flex-grow-1 d-flex flex-column">
-                                                        <div class="flex-grow-1">
-                                                            <div class="row g-2">
-                                                                <div class="col-12">
-                                                                    <small class="text-muted d-block">
-                                                                        <strong><i class="fas fa-box me-1"></i>Image:</strong>
-                                                                    </small>
-                                                                    <code class="small">{{ service.image or 'N/A' }}</code>
-                                                                </div>
-                                                                <div class="col-12">
-                                                                    <small class="text-muted d-block">
-                                                                        <strong><i class="fas fa-tag me-1"></i>Container:</strong>
-                                                                    </small>
-                                                                    <span class="small">{{ service.container_name or service_name }}</span>
-                                                                </div>
-                                                                {% if service.ports %}
-                                                                <div class="col-12">
-                                                                    <small class="text-muted d-block">
-                                                                        <strong><i class="fas fa-network-wired me-1"></i>Ports:</strong>
-                                                                    </small>
-                                                                    <div>
-                                                                        {% for port in service.ports %}
-                                                                            <span class="badge bg-info me-1 mb-1">{{ port }}</span>
-                                                                        {% endfor %}
-                                                                    </div>
-                                                                    <div id="port-consistency-{{ service_name }}" class="mt-1">
-                                                                        <!-- Port consistency status will be loaded here -->
-                                                                    </div>
-                                                                </div>
-                                                                {% endif %}
-                                                                <div class="col-12">
-                                                                    <small class="text-muted d-block">
-                                                                        <strong><i class="fas fa-robot me-1"></i>Strategy:</strong>
-                                                                    </small>
-                                                                    <span class="small">{{ service.strategy or 'N/A' }}</span>
-                                                                    <div id="strategy-validation-{{ service_name }}" class="mt-1">
-                                                                        <!-- Strategy validation status will be loaded here -->
-                                                                    </div>
-                                                                </div>
-                                                                <div class="col-12">
-                                                                    <small class="text-muted d-block">
-                                                                        <strong><i class="fas fa-cog me-1"></i>Config:</strong>
-                                                                    </small>
-                                                                    <span class="small">{{ service.config_file or 'N/A' }}</span>
-                                                                    <div id="config-validation-{{ service_name }}" class="mt-1">
-                                                                        <!-- Config validation status will be loaded here -->
-                                                                    </div>
-                                                                </div>
-                                                                {% if service.command %}
-                                                                <div class="col-12">
-                                                                    <small class="text-muted d-block">
-                                                                        <strong><i class="fas fa-terminal me-1"></i>Command:</strong>
-                                                                    </small>
-                                                                    <code class="small text-break">{{ service.command if service.command is string else service.command|join(' ') }}</code>
-                                                                </div>
-                                                                {% endif %}
-                                                                {% if service.restart %}
-                                                                <div class="col-12">
-                                                                    <small class="text-muted d-block">
-                                                                        <strong><i class="fas fa-redo me-1"></i>Restart Policy:</strong>
-                                                                    </small>
-                                                                    <span class="badge bg-secondary">{{ service.restart }}</span>
-                                                                </div>
-                                                                {% endif %}
-                                                            </div>
-                                                        </div>
-                                                        <div class="mt-auto">
-                                                            <div class="row g-1">
-                                                                <div class="col-6">
-                                                                    <button class="btn btn-primary btn-sm w-100" onclick="{{ button_action }}('{{ service_name }}')" title="{{ button_text }} Container">
-                                                                        <i class="fas fa-{{ button_icon }}"></i> {{ button_text }}
-                                                                    </button>
-                                                                </div>
-                                                                <div class="col-6">
-                                                                    <button class="btn btn-info btn-sm w-100" onclick="validateServiceConfig('{{ service_name }}')" title="Validate Config">
-                                                                        <i class="fas fa-check-circle"></i> Validate
-                                                                    </button>
-                                                                </div>
-                                                                <div class="col-6">
-                                                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="editServiceVisual('{{ service_name }}')" title="Edit Service">
-                                                                        <i class="fas fa-edit"></i> Edit
-                                                                    </button>
-                                                                </div>
-                                                                <div class="col-6">
-                                                                    <button class="btn btn-outline-danger btn-sm w-100" onclick="deleteService('{{ service_name }}')" title="Remove Service">
-                                                                        <i class="fas fa-times"></i> Remove
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                            <!-- Responsive card list for mobile/tablet (hidden on lg and up) -->
+                            <div class="responsive-card-list d-lg-none">
+                                {% for service_name, service in services.items() %}
+                                <div class="card mb-3 pairlist-card service-card" data-status="{{ service.status }}">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div>
+                                                <h6 class="card-title mb-1">{{ service_name }}</h6>
+                                                <small class="text-muted">{{ service.image or 'N/A' }}</small>
                                             </div>
-                                            {% endfor %}
-                                        {% else %}
-                                            <div class="col-12">
-                                                <div class="card">
-                                                    <div class="card-body text-center text-muted py-5">
-                                                        <i class="fas fa-info-circle fa-3x mb-3"></i>
-                                                        <h6>No services configured</h6>
-                                                        <p class="mb-0">Click "Edit Stack" to add services to your configuration</p>
-                                                    </div>
-                                                </div>
+                                            <div class="dropdown">
+                                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                    <i class="fas fa-ellipsis-v"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li>
+                                                        <a class="dropdown-item" href="#" onclick="editServiceVisual('{{ service_name }}')">
+                                                            <i class="fas fa-eye"></i> View/Edit
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="#" onclick="cloneService('{{ service_name }}')">
+                                                            <i class="fas fa-clone"></i> Clone
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="#" onclick="downloadServiceConfig('{{ service_name }}')">
+                                                            <i class="fas fa-download"></i> Download
+                                                        </a>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item text-danger" href="#" onclick="deleteService('{{ service_name }}')">
+                                                            <i class="fas fa-trash"></i> Delete
+                                                        </a>
+                                                    </li>
+                                                </ul>
                                             </div>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- End Services Tab -->
-                        
-                        <!-- Networks Tab -->
-                        <div class="tab-pane fade" id="networks-content" role="tabpanel">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h6 class="mb-0">Networks Overview</h6>
-                                <button class="btn btn-success btn-sm" onclick="showAddNetworkModal()">
-                                    <i class="fas fa-plus"></i> Add Network
-                                </button>
-                            </div>
-                            
-                            <div id="networksList">
-                                <!-- Networks will be loaded here -->
-                                <div class="row" id="networksCardContent">
-                                    <div class="text-center text-muted py-4" id="loadingNetworks">
-                                        <div class="spinner-border" role="status">
-                                            <span class="visually-hidden">Loading networks...</span>
                                         </div>
-                                        <p class="mt-2">Loading networks...</p>
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-6">
+                                                <small class="text-muted d-block">Status</small>
+                                                <span class="badge bg-{% if service.status == 'running' %}success{% elif service.status == 'stopped' %}danger{% else %}secondary{% endif %}">{{ service.status|title if service.status else 'Unknown' }}</span>
+                                            </div>
+                                            <div class="col-6">
+                                                <small class="text-muted d-block">Ports</small>
+                                                {% if service.ports %}
+                                                    {% for port in service.ports %}
+                                                        <span class="badge bg-info me-1 mb-1">{{ port }}</span>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted">No ports</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-6">
+                                                <small class="text-muted d-block">Strategy</small>
+                                                <span class="badge bg-secondary">{{ service.strategy or 'N/A' }}</span>
+                                            </div>
+                                            <div class="col-6">
+                                                <small class="text-muted d-block">Config</small>
+                                                <span class="badge bg-secondary">{{ service.config_file or 'N/A' }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="d-grid gap-2 d-md-flex">
+                                            {% if not service.status or service.status == 'not_found' or service.status == 'unknown' %}
+                                                <button class="btn btn-success btn-sm flex-fill border-dark" onclick="executeContainerAction('{{ service_name }}')">
+                                                    <i class="fas fa-plus"></i> Create
+                                                </button>
+                                            {% elif service.status == 'running' %}
+                                                <button class="btn btn-warning btn-sm flex-fill border-dark" onclick="executeContainerAction('{{ service_name }}')">
+                                                    <i class="fas fa-redo"></i> Restart
+                                                </button>
+                                            {% elif service.status == 'stopped' %}
+                                                <button class="btn btn-primary btn-sm flex-fill border-dark" onclick="executeContainerAction('{{ service_name }}')">
+                                                    <i class="fas fa-play"></i> Start
+                                                </button>
+                                            {% endif %}
+                                            <button class="btn btn-info btn-sm flex-fill border-dark" onclick="validateServiceConfig('{{ service_name }}')">
+                                                <i class="fas fa-check-circle"></i> Validate
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div id="noNetworks" class="text-center text-muted py-4" style="display: none;">
-                                        <i class="fas fa-info-circle fa-2x mb-2"></i>
-                                        <p>No networks configured</p>
-                                    </div>
+                                </div>
+                                {% endfor %}
+                                {% if services|length == 0 %}
+                                <div class="alert alert-info text-center">No services configured. Click "Edit Stack" to add services.</div>
+                                {% endif %}
+                            </div>
+                            <!-- Desktop/tablet table view (hidden on small screens) -->
+                            <div class="responsive-table-wrapper d-none d-lg-block">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Status</th>
+                                                <th>Image</th>
+                                                <th>Ports</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for service_name, service in services.items() %}
+                                            <tr>
+                                                <td><strong>{{ service_name }}</strong></td>
+                                                <td><span class="badge bg-{% if service.status == 'running' %}success{% elif service.status == 'stopped' %}danger{% else %}secondary{% endif %}">{{ service.status|title if service.status else 'Unknown' }}</span></td>
+                                                <td><code>{{ service.image or 'N/A' }}</code></td>
+                                                <td>
+                                                    {% if service.ports %}
+                                                        {% for port in service.ports %}
+                                                            <span class="badge bg-info me-1 mb-1">{{ port }}</span>
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        <span class="text-muted">No ports</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    <div class="btn-group btn-group-sm">
+                                                        {% if not service.status or service.status == 'not_found' or service.status == 'unknown' %}
+                                                            <button class="btn btn-success border-dark" onclick="executeContainerAction('{{ service_name }}')" title="Create Container">
+                                                                <i class="fas fa-plus"></i>
+                                                            </button>
+                                                        {% elif service.status == 'running' %}
+                                                            <button class="btn btn-warning border-dark" onclick="executeContainerAction('{{ service_name }}')" title="Restart Container">
+                                                                <i class="fas fa-redo"></i>
+                                                            </button>
+                                                        {% elif service.status == 'stopped' %}
+                                                            <button class="btn btn-primary border-dark" onclick="executeContainerAction('{{ service_name }}')" title="Start Container">
+                                                                <i class="fas fa-play"></i>
+                                                            </button>
+                                                        {% endif %}
+                                                        <button class="btn btn-outline-primary border-dark" onclick="editServiceVisual('{{ service_name }}')" title="View/Edit">
+                                                            <i class="fas fa-eye"></i>
+                                                        </button>
+                                                        <button class="btn btn-outline-success border-dark" onclick="cloneService('{{ service_name }}')" title="Clone">
+                                                            <i class="fas fa-clone"></i>
+                                                        </button>
+                                                        <button class="btn btn-outline-secondary border-dark" onclick="downloadServiceConfig('{{ service_name }}')" title="Download">
+                                                            <i class="fas fa-download"></i>
+                                                        </button>
+                                                        <button class="btn btn-outline-danger border-dark" onclick="deleteService('{{ service_name }}')" title="Delete">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
-                        <!-- End Networks Tab -->
+                        <!-- ...existing code for other tabs and modals... -->
                     </div>
-                    <!-- End Tab Content -->
-                </div>
-            </div>
-        </div>
-    </div>
+
+                                    <!-- Service Action Modal -->
+                                    <div class="modal fade" id="serviceActionModal" tabindex="-1">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="serviceActionModalTitle">Service Action</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body" id="serviceActionModalBody">
+                                                    <!-- Action content -->
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <button type="button" class="btn btn-primary" id="confirmServiceAction">Confirm</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Docker Stack Management Modal -->
+                                    <div class="modal fade" id="stackManagementModal" tabindex="-1">
+                                        <div class="modal-dialog modal-xl">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title"><i class="fas fa-layer-group"></i> Docker Stack Editor</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <ul class="nav nav-tabs mb-3" id="modalStackTabs" role="tablist">
+                                                        <li class="nav-item" role="presentation">
+                                                            <button class="nav-link active" id="modal-compose-tab" data-bs-toggle="tab" data-bs-target="#modal-compose-content" type="button" role="tab">
+                                                                <i class="fas fa-file-code"></i> YAML Editor
+                                                            </button>
+                                                        </li>
+                                                    </ul>
+                                                    <div class="tab-content" id="modalStackTabContent">
+                                                        <div class="tab-pane fade show active" id="modal-compose-content" role="tabpanel">
+                                                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                                                <h6 class="mb-0">Docker Compose YAML</h6>
+                                                                <div class="btn-group btn-group-sm">
+                                                                    <button class="btn btn-outline-primary" onclick="stackReloadCompose()">Reload</button>
+                                                                    <button class="btn btn-outline-warning" onclick="stackValidateCompose()">Validate</button>
+                                                                    <button class="btn btn-outline-success" onclick="stackSaveCompose()">Save</button>
+                                                                </div>
+                                                            </div>
+                                                            <div id="servicesCardContainer">
+                                                                <!-- Cards will be rendered here by JS, but also render server-side for fallback/SEO -->
+                                                                <div class="row">
+                                                                    {% for service_name, service in services.items() %}
+                                                                    <div class="col-12 col-lg-6 mb-3">
+                                                                        <div class="card h-100 service-card {% if service.status == 'running' %}running{% elif service.status == 'stopped' %}stopped{% endif %} d-flex flex-column">
+                                                                            <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#service-card-body-{{ service_name }}" aria-expanded="false" aria-controls="service-card-body-{{ service_name }}">
+                                                                                <div class="d-flex align-items-center">
+                                                                                    <h6 class="mb-0">
+                                                                                        <i class="fas fa-cube me-2"></i>{{ service_name }}
+                                                                                    </h6>
+                                                                                    <span class="badge bg-{% if service.status == 'running' %}success{% elif service.status == 'stopped' %}danger{% else %}warning{% endif %} ms-2">
+                                                                                        <i class="fas fa-{% if service.status == 'running' %}play{% elif service.status == 'stopped' %}stop{% else %}pause{% endif %}"></i> {{ service.status or 'Not Created' }}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div class="d-flex align-items-center gap-2">
+                                                                                    <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); executeContainerAction('{{ service_name }}')" title="{% if not service.status or service.status == 'not_found' or service.status == 'unknown' %}Create Container{% else %}Restart Container{% endif %}">
+                                                                                        <i class="fas fa-{% if not service.status or service.status == 'not_found' or service.status == 'unknown' %}plus{% else %}redo{% endif %}"></i> {% if not service.status or service.status == 'not_found' or service.status == 'unknown' %}Create Container{% else %}Restart Container{% endif %}
+                                                                                    </button>
+                                                                                    <button class="btn btn-info btn-sm" onclick="event.stopPropagation(); validateServiceConfig('{{ service_name }}')" title="Validate Config">
+                                                                                        <i class="fas fa-check-circle"></i> Validate
+                                                                                    </button>
+                                                                                    <button class="btn btn-outline-primary btn-sm" onclick="event.stopPropagation(); editServiceVisual('{{ service_name }}')" title="Edit Service">
+                                                                                        <i class="fas fa-eye"></i> View/Edit
+                                                                                    </button>
+                                                                                    <button class="btn btn-outline-danger btn-sm" onclick="event.stopPropagation(); deleteService('{{ service_name }}')" title="Remove Service">
+                                                                                        <i class="fas fa-times"></i> Remove
+                                                                                    </button>
+                                                                                    <button class="btn btn-link btn-sm p-0 ms-2" onclick="event.stopPropagation(); toggleServiceCard('{{ service_name }}')" title="Expand/Collapse">
+                                                                                        <i id="service-card-toggle-icon-{{ service_name }}" class="fas fa-chevron-down"></i>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div id="service-card-body-{{ service_name }}" class="collapse">
+                                                                                <div class="card-body flex-grow-1 d-flex flex-column">
+                                                                                    <div class="flex-grow-1">
+                                                                                        <div class="row g-2">
+                                                                                            <div class="col-12">
+                                                                                                <small class="text-muted d-block">
+                                                                                                    <strong><i class="fas fa-box me-1"></i>Image:</strong>
+                                                                                                </small>
+                                                                                                <code class="small">{{ service.image or 'N/A' }}</code>
+                                                                                            </div>
+                                                                                            <div class="col-12">
+                                                                                                <small class="text-muted d-block">
+                                                                                                    <strong><i class="fas fa-tag me-1"></i>Container:</strong>
+                                                                                                </small>
+                                                                                                <span class="small">{{ service.container_name or service_name }}</span>
+                                                                                            </div>
+                                                                                            {% if service.ports %}
+                                                                                            <div class="col-12">
+                                                                                                <small class="text-muted d-block">
+                                                                                                    <strong><i class="fas fa-network-wired me-1"></i>Ports:</strong>
+                                                                                                </small>
+                                                                                                <div>
+                                                                                                    {% for port in service.ports %}
+                                                                                                        <span class="badge bg-info me-1 mb-1">{{ port }}</span>
+                                                                                                    {% endfor %}
+                                                                                                </div>
+                                                                                                <div id="port-consistency-{{ service_name }}" class="mt-1">
+                                                                                                    <!-- Port consistency status will be loaded here -->
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            {% endif %}
+                                                                                            <div class="col-12">
+                                                                                                <small class="text-muted d-block">
+                                                                                                    <strong><i class="fas fa-robot me-1"></i>Strategy:</strong>
+                                                                                                </small>
+                                                                                                <span class="small">{{ service.strategy or 'N/A' }}</span>
+                                                                                                <div id="strategy-validation-{{ service_name }}" class="mt-1">
+                                                                                                    <!-- Strategy validation status will be loaded here -->
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div class="col-12">
+                                                                                                <small class="text-muted d-block">
+                                                                                                    <strong><i class="fas fa-cog me-1"></i>Config:</strong>
+                                                                                                </small>
+                                                                                                <span class="small">{{ service.config_file or 'N/A' }}</span>
+                                                                                                <div id="config-validation-{{ service_name }}" class="mt-1">
+                                                                                                    <!-- Config validation status will be loaded here -->
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            {% if service.command %}
+                                                                                            <div class="col-12">
+                                                                                                <small class="text-muted d-block">
+                                                                                                    <strong><i class="fas fa-terminal me-1"></i>Command:</strong>
+                                                                                                </small>
+                                                                                                <code class="small text-break">{{ service.command if service.command is string else service.command|join(' ') }}</code>
+                                                                                            </div>
+                                                                                            {% endif %}
+                                                                                            {% if service.restart %}
+                                                                                            <div class="col-12">
+                                                                                                <small class="text-muted d-block">
+                                                                                                    <strong><i class="fas fa-redo me-1"></i>Restart Policy:</strong>
+                                                                                                </small>
+                                                                                                <span class="badge bg-secondary">{{ service.restart }}</span>
+                                                                                            </div>
+                                                                                            {% endif %}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div class="mt-auto">
+                                                                                        <div class="row g-1">
+                                                                                            <div class="col-6">
+                                                                                                <button class="btn btn-primary btn-sm w-100" onclick="executeContainerAction('{{ service_name }}')" title="{% if not service.status or service.status == 'not_found' or service.status == 'unknown' %}Create Container{% else %}Restart Container{% endif %}">
+                                                                                                    <i class="fas fa-{% if not service.status or service.status == 'not_found' or service.status == 'unknown' %}plus{% else %}redo{% endif %}"></i> {% if not service.status or service.status == 'not_found' or service.status == 'unknown' %}Create Container{% else %}Restart Container{% endif %}
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            <div class="col-6">
+                                                                                                <button class="btn btn-info btn-sm w-100" onclick="validateServiceConfig('{{ service_name }}')" title="Validate Config">
+                                                                                                    <i class="fas fa-check-circle"></i> Validate
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            <div class="col-6">
+                                                                                                <button class="btn btn-outline-primary btn-sm w-100" onclick="editServiceVisual('{{ service_name }}')" title="Edit Service">
+                                                                                                    <i class="fas fa-eye"></i> View/Edit
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            <div class="col-6">
+                                                                                                <button class="btn btn-outline-danger btn-sm w-100" onclick="deleteService('{{ service_name }}')" title="Remove Service">
+                                                                                                    <i class="fas fa-times"></i> Remove
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    {% else %}
+                                                                    <div class="col-12">
+                                                                        <div class="alert alert-info text-center">No services configured. Click "Edit Stack" to add services.</div>
+                                                                    </div>
+                                                                    {% endfor %}
+                                                                </div>
+                                                            </div>
+
+                                    <!-- Networks Management Modal -->
+                                    <div class="modal fade" id="networksModal" tabindex="-1">
+                                        <div class="modal-dialog modal-lg">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title"><i class="fas fa-network-wired"></i> Docker Networks Management</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                                        <h6 class="mb-0">Available Networks</h6>
+                                                        <button type="button" class="btn btn-success btn-sm" onclick="showAddNetworkModal()">
+                                                            <i class="fas fa-plus"></i> Add Network
+                                                        </button>
+                                                    </div>
+                                                    <div id="modalNetworksList">
+                                                        <!-- Networks will be loaded here -->
+                                                    </div>
+                                                    <div id="modalLoadingNetworks" class="text-center">
+                                                        <div class="spinner-border text-primary spinner-border-sm" role="status">
+                                                            <span class="visually-hidden">Loading networks...</span>
+                                                        </div>
+                                                    </div>
+                                                    <div id="modalNoNetworks" class="text-center text-muted" style="display: none;">
+                                                        <i class="fas fa-info-circle fa-2x mb-2"></i>
+                                                        <p>No networks defined in Docker Compose file</p>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-primary" onclick="loadNetworks()">
+                                                        <i class="fas fa-sync"></i> Refresh
+                                                    </button>
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+
 
 <!-- Service Action Modals -->
 <div class="modal fade" id="serviceActionModal" tabindex="-1">
@@ -520,32 +738,70 @@
 </style>
 
 <script>
+// Start/Restart/Create a container for a service and refresh status
+async function executeContainerAction(serviceName) {
+    try {
+        // Show a spinner or disable buttons if desired
+        const response = await fetch(`/api/docker/service/${encodeURIComponent(serviceName)}/action`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) throw new Error('Failed to execute action');
+        const data = await response.json();
+        if (data.success) {
+            loadServices();
+        } else {
+            alert('Service action failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
 let editor = null;
 let currentServices = {};
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM Content Loaded - initializing services page');
     initializeMonacoEditor();
     loadServices();
     loadNetworks();
-    
-    // Initialize editor mode toggle
-    // Note: Visual editor removed from stack, only YAML editor remains
-    
-    // Initialize unified tab handlers
     initializeUnifiedTabs();
-    
-    // Initialize configuration tabs
     initializeConfigTabs();
-    
-    // Load Docker Compose content immediately to populate textarea
-    // This ensures the content is available regardless of active mode
-    setTimeout(() => {
-        console.log('Loading Docker Compose content during initialization');
-        loadDockerCompose();
-    }, 100);
+    setTimeout(() => { loadDockerCompose(); }, 100);
+
+    // Only Docker status auto-refreshes every 5 seconds
+    setInterval(() => {
+        loadServices();
+    }, 5000);
 });
+
+// Notification bubble for errors
+function showDockerErrorNotification() {
+    // Remove any existing notification
+    const existing = document.getElementById('docker-error-notification');
+    if (existing) existing.remove();
+    const notification = document.createElement('div');
+    notification.id = 'docker-error-notification';
+    notification.className = 'position-fixed top-0 end-0 m-3 alert alert-danger alert-dismissible fade show';
+    notification.style.zIndex = '9999';
+    notification.innerHTML = `
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <span>Cannot connect to Docker or API. </span>
+        <button type="button" class="btn btn-sm btn-primary ms-2" onclick="forceRefreshServices()">Force Refresh</button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(notification);
+}
+
+function hideDockerErrorNotification() {
+    const existing = document.getElementById('docker-error-notification');
+    if (existing) existing.remove();
+}
+
+function forceRefreshServices() {
+    hideDockerErrorNotification();
+    loadServices();
+}
 
 // Initialize Monaco Editor
 function initializeMonacoEditor() {
@@ -568,23 +824,18 @@ function initializeMonacoEditor() {
 async function loadServices() {
     console.log('loadServices() called');
     try {
-        console.log('Fetching services from API...');
         const response = await fetch('/api/docker/services');
-        console.log('API response status:', response.status);
+        if (!response.ok) throw new Error('API not reachable');
         const data = await response.json();
-        console.log('API response data:', data);
-        
         if (data.success) {
             currentServices = data.services;
-            console.log('Services loaded, calling displayServices with:', Object.keys(data.services).length, 'services');
             displayServices(data.services);
+            hideDockerErrorNotification();
         } else {
-            console.error('API returned error:', data.error);
-            showError('Failed to load services: ' + data.error);
+            showDockerErrorNotification();
         }
     } catch (error) {
-        console.error('Error in loadServices:', error);
-        showError('Error loading services: ' + error.message);
+        showDockerErrorNotification();
     }
 }
 
@@ -669,2462 +920,297 @@ function displayServices(services) {
             
             cardsHtml += `
                 <div class="col-12 col-lg-6 mb-3">
-                    <div class="card h-100 service-card ${service.status === 'running' ? 'running' : service.status === 'stopped' ? 'stopped' : ''} d-flex flex-column">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0">
-                                <i class="fas fa-cube me-2"></i>${serviceName}
-                            </h6>
+                    <!-- The following card was referencing 'service' outside the loop and is removed to fix Jinja2 UndefinedError. -->
+                        <div class="card-header d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#service-card-body-${serviceName}" aria-expanded="false" aria-controls="service-card-body-${serviceName}">
                             <div class="d-flex align-items-center">
-                                <span class="badge bg-${statusColor} me-2">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-cube me-2"></i>${serviceName}
+                                </h6>
+                                <span class="badge bg-${statusColor} ms-2">
                                     <i class="fas fa-${statusIcon}"></i> ${statusText}
                                 </span>
                             </div>
-                        </div>
-                        <div class="card-body flex-grow-1 d-flex flex-column">
-                            <div class="flex-grow-1">
-                                <div class="row g-2">
-                                    <div class="col-12">
-                                        <small class="text-muted d-block">
-                                            <strong><i class="fas fa-box me-1"></i>Image:</strong>
-                                        </small>
-                                        <code class="small text-break">${service.image || 'N/A'}</code>
-                                    </div>
-                                    <div class="col-12">
-                                        <small class="text-muted d-block">
-                                            <strong><i class="fas fa-tag me-1"></i>Container:</strong>
-                                        </small>
-                                        <span class="small">${service.container_name || serviceName}</span>
-                                    </div>
-                                    ${ports.length > 0 ? `
-                                    <div class="col-12">
-                                        <small class="text-muted d-block">
-                                            <strong><i class="fas fa-network-wired me-1"></i>Ports:</strong>
-                                        </small>
-                                        <div id="ports-${serviceName}">
-                                            ${ports.map(port => `<span class="badge bg-info me-1 mb-1">${port}</span>`).join('')}
-                                        </div>
-                                        <div id="port-consistency-${serviceName}" class="mt-1">
-                                            <!-- Port consistency status will be loaded here -->
-                                        </div>
-                                    </div>
-                                    ` : ''}
-                                    <div class="col-12">
-                                        <small class="text-muted d-block">
-                                            <strong><i class="fas fa-robot me-1"></i>Strategy:</strong>
-                                        </small>
-                                        <span class="small">${service.strategy || 'N/A'}</span>
-                                        <div id="strategy-validation-${serviceName}" class="mt-1">
-                                            <!-- Strategy validation status will be loaded here -->
-                                        </div>
-                                    </div>
-                                    <div class="col-12">
-                                        <small class="text-muted d-block">
-                                            <strong><i class="fas fa-cog me-1"></i>Config:</strong>
-                                        </small>
-                                        <span class="small">${service.config_file || 'N/A'}</span>
-                                        <div id="config-validation-${serviceName}" class="mt-1">
-                                            <!-- Config validation status will be loaded here -->
-                                        </div>
-                                    </div>
-                                    ${service.command ? `
-                                    <div class="col-12">
-                                        <small class="text-muted d-block">
-                                            <strong><i class="fas fa-terminal me-1"></i>Command:</strong>
-                                        </small>
-                                        <code class="small text-break">${Array.isArray(service.command) ? service.command.join(' ') : service.command}</code>
-                                    </div>
-                                    ` : ''}
-                                    ${service.restart ? `
-                                    <div class="col-12">
-                                        <small class="text-muted d-block">
-                                            <strong><i class="fas fa-redo me-1"></i>Restart Policy:</strong>
-                                        </small>
-                                        <span class="badge bg-secondary">${service.restart}</span>
-                                    </div>
-                                    ` : ''}
-                                </div>
-                            </div>
-                            <div class="mt-auto">
-                                <div class="row g-1">
-                                    <div class="col-6">
-                                        <button class="btn btn-${buttonClass} btn-sm w-100" onclick="executeContainerAction('${!service.status || service.status === 'not_found' || service.status === 'unknown' ? 'create' : 'restart'}', '${serviceName}')" title="${buttonText}">
-                                            <i class="fas fa-${buttonIcon}"></i> ${buttonText}
-                                        </button>
-                                    </div>
-                                    <div class="col-6">
-                                        <button class="btn btn-info btn-sm w-100" onclick="validateServiceConfig('${serviceName}')" title="Validate Config">
-                                            <i class="fas fa-check-circle"></i> Validate
-                                        </button>
-                                    </div>
-                                    <div class="col-6">
-                                        <button class="btn btn-outline-primary btn-sm w-100" onclick="editServiceVisual('${serviceName}')" title="Edit Service">
-                                            <i class="fas fa-edit"></i> Edit
-                                        </button>
-                                    </div>
-                                    <div class="col-6">
-                                        <button class="btn btn-outline-danger btn-sm w-100" onclick="deleteService('${serviceName}')" title="Remove Service">
-                                            <i class="fas fa-times"></i> Remove
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-        cardsContainer.innerHTML = cardsHtml;
-        
-        // Check port consistency and validation for all services
-        Object.keys(services).forEach(serviceName => {
-            const service = services[serviceName];
-            if (service.ports && service.ports.length > 0) {
-                checkPortConsistency(serviceName);
-            }
-            // Always check strategy and config validation
-            checkStrategyValidation(serviceName);
-            checkConfigValidation(serviceName);
-        });
-    }
-}
-
-// Service management functions
-async function createService(serviceName) {
-    await executeContainerAction('create', serviceName);
-}
-
-async function startService(serviceName) {
-    await executeContainerAction('start', serviceName);
-}
-
-async function restartService(serviceName) {
-    await executeContainerAction('restart', serviceName);
-}
-
-async function validateServiceConfig(serviceName) {
-    try {
-        showInfo(`Validating configuration for ${serviceName}...`);
-        
-        // Get service configuration
-        const service = currentServices[serviceName];
-        if (!service) {
-            showError('Service configuration not found');
-            return;
-        }
-        
-        // Basic validation checks
-        const validationErrors = [];
-        
-        if (!service.image) {
-            validationErrors.push('Missing Docker image');
-        }
-        
-        if (service.ports) {
-            const ports = Array.isArray(service.ports) ? service.ports : [service.ports];
-            ports.forEach(port => {
-                if (typeof port === 'string' && !port.includes(':')) {
-                    validationErrors.push(`Invalid port mapping: ${port}`);
-                }
-            });
-        }
-        
-        if (service.volumes) {
-            const volumes = Array.isArray(service.volumes) ? service.volumes : [service.volumes];
-            volumes.forEach(volume => {
-                if (typeof volume === 'string' && !volume.includes(':')) {
-                    validationErrors.push(`Invalid volume mapping: ${volume}`);
-                }
-            });
-        }
-        
-        // Call backend validation if available
-        const response = await fetch(`/api/docker-compose/validate-service/${serviceName}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ service_config: service })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            if (validationErrors.length === 0 && data.valid) {
-                showSuccess(`Service "${serviceName}" configuration is valid`);
-            } else {
-                const allErrors = [...validationErrors, ...(data.errors || [])];
-                showError(`Configuration errors: ${allErrors.join(', ')}`);
-            }
-        } else {
-            if (validationErrors.length === 0) {
-                showSuccess(`Service "${serviceName}" basic validation passed`);
-            } else {
-                showError(`Configuration errors: ${validationErrors.join(', ')}`);
-            }
-        }
-    } catch (error) {
-        showError(`Error validating service configuration: ${error.message}`);
-    }
-}
-
-async function checkPortConsistency(serviceName) {
-    try {
-        const response = await fetch(`/api/docker-compose/validate-port-consistency/${serviceName}`);
-        const data = await response.json();
-        
-        const consistencyElement = document.getElementById(`port-consistency-${serviceName}`);
-        if (!consistencyElement) return;
-        
-        // Handle API errors first
-        if (!data.success) {
-            consistencyElement.innerHTML = `
-                <small class="text-danger">
-                    <i class="fas fa-exclamation-circle me-1"></i>
-                    Error: ${data.error || 'Unknown error'}
-                </small>
-            `;
-            return;
-        }
-        
-        // Handle successful validation results
-        if (data.consistent) {
-            // Display improved format: "host 8737 → container 8080 = config 8080 ✓"
-            const hostPortText = data.host_port ? `host ${data.host_port}` : 'port';
-            consistencyElement.innerHTML = `
-                <small class="text-success">
-                    <i class="fas fa-check-circle me-1"></i>
-                    ${hostPortText} → container ${data.container_port} = config ${data.config_port} ✓
-                </small>
-            `;
-        } else {
-            // Build detailed error message based on specific issues
-            let iconClass = 'fas fa-exclamation-triangle';
-            let textClass = 'text-warning';
-            let issues = [];
-            
-            // Check for port conflicts (highest priority - red error)
-            if (data.port_conflicts && data.port_conflicts.length > 0) {
-                iconClass = 'fas fa-times-circle';
-                textClass = 'text-danger';
-                const hostPortText = data.host_port ? `host ${data.host_port}` : 'port';
-                issues.push(`${hostPortText} conflicts with: ${data.port_conflicts.join(', ')}`);
-            }
-            
-            // Check for container/config port mismatch
-            if (data.container_port !== data.config_port && !data.config_missing) {
-                const hostPortText = data.host_port ? `host ${data.host_port}` : 'port';
-                issues.push(`${hostPortText} → container ${data.container_port} ≠ config ${data.config_port} ✗`);
-            }
-            
-            // Check for missing config file
-            if (data.config_missing) {
-                issues.push('Config file missing');
-            }
-            
-            // If no specific issues found but still not consistent, show general message
-            if (issues.length === 0) {
-                issues.push(data.message || 'Port validation failed');
-            }
-            
-            consistencyElement.innerHTML = `
-                <small class="${textClass}">
-                    <i class="${iconClass} me-1"></i>
-                    ${issues.join('; ')}
-                </small>
-            `;
-        }
-    } catch (error) {
-        console.error(`Error checking port consistency for ${serviceName}:`, error);
-        const consistencyElement = document.getElementById(`port-consistency-${serviceName}`);
-        if (consistencyElement) {
-            consistencyElement.innerHTML = `
-                <small class="text-danger">
-                    <i class="fas fa-exclamation-circle me-1"></i>
-                    Network error: ${error.message}
-                </small>
-            `;
-        }
-    }
-}
-
-// Function to check strategy validation for a service
-async function checkStrategyValidation(serviceName) {
-    try {
-        const response = await fetch(`/api/docker-compose/validate-strategy/${serviceName}`);
-        const data = await response.json();
-        
-        const validationElement = document.getElementById(`strategy-validation-${serviceName}`);
-        if (!validationElement) return;
-        
-        if (!data.success) {
-            validationElement.innerHTML = `
-                <small class="text-danger">
-                    <i class="fas fa-exclamation-circle me-1"></i>
-                    Error: ${data.error || 'Unknown error'}
-                </small>
-            `;
-            return;
-        }
-        
-        // Handle validation results based on priority
-        let iconClass, textClass;
-        
-        switch (data.priority) {
-            case 'success':
-                iconClass = 'fas fa-check-circle';
-                textClass = 'text-success';
-                break;
-            case 'warning':
-                iconClass = 'fas fa-exclamation-triangle';
-                textClass = 'text-warning';
-                break;
-            case 'error':
-                iconClass = 'fas fa-times-circle';
-                textClass = 'text-danger';
-                break;
-            default:
-                iconClass = 'fas fa-info-circle';
-                textClass = 'text-info';
-        }
-        
-        validationElement.innerHTML = `
-            <small class="${textClass}">
-                <i class="${iconClass} me-1"></i>
-                ${data.message || 'Strategy validation completed'}
-            </small>
-        `;
-        
-    } catch (error) {
-        console.error(`Error checking strategy validation for ${serviceName}:`, error);
-        const validationElement = document.getElementById(`strategy-validation-${serviceName}`);
-        if (validationElement) {
-            validationElement.innerHTML = `
-                <small class="text-danger">
-                    <i class="fas fa-exclamation-circle me-1"></i>
-                    Network error: ${error.message}
-                </small>
-            `;
-        }
-    }
-}
-
-// Function to check config validation for a service
-async function checkConfigValidation(serviceName) {
-    try {
-        const response = await fetch(`/api/docker-compose/validate-config/${serviceName}`);
-        const data = await response.json();
-        
-        const validationElement = document.getElementById(`config-validation-${serviceName}`);
-        if (!validationElement) return;
-        
-        if (!data.success) {
-            validationElement.innerHTML = `
-                <small class="text-danger">
-                    <i class="fas fa-exclamation-circle me-1"></i>
-                    Error: ${data.error || 'Unknown error'}
-                </small>
-            `;
-            return;
-        }
-        
-        // Handle validation results based on priority
-        let iconClass, textClass;
-        
-        switch (data.priority) {
-            case 'success':
-                iconClass = 'fas fa-check-circle';
-                textClass = 'text-success';
-                break;
-            case 'warning':
-                iconClass = 'fas fa-exclamation-triangle';
-                textClass = 'text-warning';
-                break;
-            case 'error':
-                iconClass = 'fas fa-times-circle';
-                textClass = 'text-danger';
-                break;
-            default:
-                iconClass = 'fas fa-info-circle';
-                textClass = 'text-info';
-        }
-        
-        validationElement.innerHTML = `
-            <small class="${textClass}">
-                <i class="${iconClass} me-1"></i>
-                ${data.message || 'Config validation completed'}
-            </small>
-        `;
-        
-    } catch (error) {
-        console.error(`Error checking config validation for ${serviceName}:`, error);
-        const validationElement = document.getElementById(`config-validation-${serviceName}`);
-        if (validationElement) {
-            validationElement.innerHTML = `
-                <small class="text-danger">
-                    <i class="fas fa-exclamation-circle me-1"></i>
-                    Network error: ${error.message}
-                </small>
-            `;
-        }
-    }
-}
-
-// Function to refresh all port consistency checks
-async function refreshPortConsistencyChecks() {
-    console.log('refreshPortConsistencyChecks() called');
-    if (!currentServices) {
-        console.log('No currentServices available');
-        return;
-    }
-    
-    console.log('Checking consistency for services:', Object.keys(currentServices));
-    let hasGlobalIssues = false;
-    
-    for (const serviceName of Object.keys(currentServices)) {
-        const service = currentServices[serviceName];
-        if (service.ports && service.ports.length > 0) {
-            console.log(`Checking port consistency for service: ${serviceName}`);
-            checkPortConsistency(serviceName);
-        } else {
-            console.log(`Skipping ${serviceName} - no ports defined`);
-        }
-        
-        // Also check strategy and config validation
-        await checkStrategyValidation(serviceName);
-        await checkConfigValidation(serviceName);
-        
-        // Check if this service has issues based on the validation data
-        if (service.port_consistency && !service.port_consistency.consistent) {
-            hasGlobalIssues = true;
-        }
-        if (service.strategy_validation && service.strategy_validation.priority === 'error') {
-            hasGlobalIssues = true;
-        }
-        if (service.config_validation && service.config_validation.priority === 'error') {
-            hasGlobalIssues = true;
-        }
-    }
-    
-    // Update global config issues indicator
-    updateConfigIssuesHeader(hasGlobalIssues);
-}
-
-async function executeContainerAction(action, serviceName) {
-    try {
-        let endpoint;
-        let method = 'POST';
-        
-        // Determine the correct API endpoint based on action
-        switch(action) {
-            case 'create':
-                // For creating containers, we use the start endpoint which does docker compose up -d
-                endpoint = `/api/docker/start/${serviceName}`;
-                break;
-            case 'start':
-                endpoint = `/api/docker/start/${serviceName}`;
-                break;
-            case 'restart':
-                endpoint = `/api/docker/restart/${serviceName}`;
-                break;
-            default:
-                throw new Error(`Unknown action: ${action}`);
-        }
-        
-        const response = await fetch(endpoint, { method: method });
-        const data = await response.json();
-        
-        if (data.success) {
-            showSuccess(data.message || `Container ${action} completed successfully`);
-            loadServices();
-            // Refresh port consistency checks after individual service actions
-            setTimeout(() => {
-                console.log(`Refreshing port consistency checks after ${action} on ${serviceName}`);
-                refreshPortConsistencyChecks();
-            }, 1000);
-        } else {
-            showError(`Failed to ${action} container: ${data.error}`);
-        }
-    } catch (error) {
-        showError(`Error ${action}ing container: ${error.message}`);
-    }
-}
-
-// Legacy function for backward compatibility
-async function executeServiceAction(action, serviceName) {
-    return await executeContainerAction(action, serviceName);
-}
-
-// Centralized port management
-function findNextAvailablePort(startPort = 8080) {
-    const usedPorts = new Set();
-    
-    // Collect all used ports from current services
-    if (currentServices) {
-        Object.values(currentServices).forEach(service => {
-            if (service.ports) {
-                const ports = Array.isArray(service.ports) ? service.ports : [service.ports];
-                ports.forEach(port => {
-                    const [host] = port.toString().split(':');
-                    if (host && !isNaN(parseInt(host))) {
-                        usedPorts.add(parseInt(host));
-                    }
-                });
-            }
-        });
-    }
-    
-    // Also check ports in current form if it exists
-    const portsTextarea = document.getElementById('servicePorts');
-    if (portsTextarea && portsTextarea.value) {
-        portsTextarea.value.split('\n').forEach(port => {
-            if (port.trim()) {
-                const [host] = port.split(':');
-                if (host && !isNaN(parseInt(host))) {
-                    usedPorts.add(parseInt(host));
-                }
-            }
-        });
-    }
-    
-    // Find next available port
-    let nextPort = startPort;
-    while (usedPorts.has(nextPort) && nextPort <= 65535) {
-        nextPort++;
-    }
-    
-    return nextPort <= 65535 ? nextPort : startPort;
-}
-
-function updateUniquePortInput() {
-    const uniqueHostPort = document.getElementById('uniqueHostPort');
-    if (uniqueHostPort) {
-        const nextPort = findNextAvailablePort();
-        uniqueHostPort.value = nextPort;
-        
-        // Update button text
-        const addButton = document.querySelector('button[onclick="addUniquePortMapping()"]');
-        if (addButton) {
-            addButton.innerHTML = `<i class="fas fa-plus"></i> Add ${nextPort}:8080`;
-        }
-    }
-}
-
-function refreshServices() {
-    loadServices();
-}
-
-// Quick Actions implementation
-async function startAllContainers() {
-    showInfo('Starting all containers...');
-    try {
-        const response = await fetch('/api/docker/start-all', {
-            method: 'POST'
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            showSuccess('All containers started successfully');
-        } else {
-            showError('Failed to start all containers: ' + data.error);
-        }
-        
-        // Refresh services display
-        setTimeout(() => {
-            loadServices();
-            setTimeout(() => {
-                console.log('Refreshing port consistency checks after Start All');
-                refreshPortConsistencyChecks();
-            }, 1000);
-        }, 2000);
-        
-    } catch (error) {
-        showError('Error starting all containers: ' + error.message);
-    }
-}
-
-async function restartAllContainers() {
-    showInfo('Restarting all containers...');
-    try {
-        const response = await fetch('/api/docker/restart-all', {
-            method: 'POST'
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            showSuccess('All containers restarted successfully');
-        } else {
-            showError('Failed to restart all containers: ' + data.error);
-        }
-        
-        // Refresh services display
-        setTimeout(() => {
-            loadServices();
-            setTimeout(() => {
-                console.log('Refreshing port consistency checks after Restart All');
-                refreshPortConsistencyChecks();
-            }, 1000);
-        }, 2000);
-        
-    } catch (error) {
-        showError('Error restarting all containers: ' + error.message);
-    }
-}
-
-async function reloadConfig() {
-    showInfo('Reloading configuration...');
-    try {
-        console.log('reloadConfig() called');
-        
-        // First, get current docker-compose content and rationalize it
-        const response = await fetch('/api/docker-compose/content');
-        const data = await response.json();
-        
-        if (data.success && data.content) {
-            const rationalized = await rationalizeYamlContent(data.content, false);
-            
-            // If rationalization found issues or fixes, save the improved version
-            if (rationalized.success && (rationalized.has_issues || rationalized.has_fixes)) {
-                console.log('Auto-rationalizing docker-compose.yml during reload');
-                
-                // Save rationalized content
-                await fetch('/api/docker-compose/content', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content: rationalized.yaml })
-                });
-                
-                // Show notifications about what was found/fixed
-                if (rationalized.has_issues) {
-                    showNotification(`Config Issues Detected: ${rationalized.issues_found.join(', ')}`, 'warning');
-                }
-                if (rationalized.has_fixes) {
-                    showNotification(`Config Auto-Fixed: ${rationalized.issues_fixed.join(', ')}`, 'info');
-                }
-                
-                // Update header
-                updateConfigIssuesHeader(rationalized.has_issues);
-            }
-        }
-        
-        // Reload docker-compose content
-        await loadDockerCompose();
-        
-        // Refresh services to get updated status
-        await loadServices();
-        
-        // Also refresh networks
-        await loadNetworks();
-        
-        // Refresh port consistency checks after services are loaded
-        console.log('Config reloaded, refreshing port consistency checks in 1000ms');
-        setTimeout(() => {
-            console.log('Refreshing port consistency checks after config reload');
-            refreshPortConsistencyChecks();
-        }, 1000);
-        
-        showSuccess('Configuration reloaded successfully');
-    } catch (error) {
-        showError('Error reloading configuration: ' + error.message);
-        console.error('reloadConfig error:', error);
-    }
-}
-
-// Docker Compose management
-async function loadDockerCompose() {
-    console.log('loadDockerCompose() called');
-    try {
-        console.log('Fetching Docker Compose from API...');
-        const response = await fetch('/api/docker/compose');
-        console.log('API response status:', response.status);
-        const data = await response.json();
-        console.log('API response data received, success:', data.success);
-        
-        if (data.success) {
-            const textarea = document.getElementById('stackComposeTextarea');
-            console.log('Textarea element found:', !!textarea);
-            if (textarea) {
-                textarea.value = data.content;
-                console.log('Docker Compose content loaded into textarea, length:', data.content.length);
-                
-                // Also update any hidden inputs or variables that might store this data
-                if (typeof window !== 'undefined') {
-                    window.currentComposeContent = data.content;
-                }
-            } else {
-                console.error('composeTextarea element not found');
-                // Try to find textarea by a more general search
-                const allTextareas = document.querySelectorAll('textarea');
-                console.log('Found', allTextareas.length, 'textarea elements total');
-                for (let i = 0; i < allTextareas.length; i++) {
-                    const ta = allTextareas[i];
-                    console.log(`Textarea ${i}: id="${ta.id}", name="${ta.name}", class="${ta.className}"`);
-                    if (ta.id === 'composeTextarea' || ta.className.includes('composeTextarea')) {
-                        ta.value = data.content;
-                        console.log('Updated textarea via fallback search');
-                        break;
-                    }
-                }
-            }
-        } else {
-            console.error('API returned error:', data.error);
-            showError('Failed to load Docker Compose: ' + data.error);
-        }
-    } catch (error) {
-        console.error('Error in loadDockerCompose:', error);
-        showError('Error loading Docker Compose: ' + error.message);
-    }
-}
-
-async function saveDockerCompose() {
-    try {
-        // Get content from YAML editor
-        const textarea = document.getElementById('composeTextarea');
-        const content = textarea ? textarea.value : '';
-        
-        const response = await fetch('/api/docker/compose', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ content: content })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showSuccess('Docker Compose saved successfully');
-            loadServices(); // Refresh services after saving
-        } else {
-            showError('Failed to save Docker Compose: ' + data.error);
-        }
-    } catch (error) {
-        showError('Error saving Docker Compose: ' + error.message);
-    }
-}
-
-async function convertVisualToYaml() {
-    // Convert the current visual services to YAML format
-    const composeData = {
-        services: {},
-        networks: {
-            freqtrade_network: {
-                driver: 'bridge'
-            }
-        }
-    };
-    
-    // Add each service from currentServices
-    Object.entries(currentServices).forEach(([serviceName, service]) => {
-        const serviceConfig = {
-            image: service.image,
-            container_name: service.container_name,
-            restart: service.restart
-        };
-        
-        if (service.ports && service.ports.length > 0) {
-            serviceConfig.ports = service.ports;
-        }
-        
-        if (service.volumes && service.volumes.length > 0) {
-            serviceConfig.volumes = service.volumes;
-        }
-        
-        if (service.command && service.command.length > 0) {
-            serviceConfig.command = service.command;
-        }
-        
-        if (service.networks && service.networks.length > 0) {
-            serviceConfig.networks = service.networks;
-        }
-        
-        if (service.environment && service.environment.length > 0) {
-            serviceConfig.environment = service.environment;
-        }
-        
-        composeData.services[serviceName] = serviceConfig;
-    });
-    
-    // Convert to YAML string (simplified - in a real implementation, you'd use a proper YAML library)
-    return JSON.stringify(composeData, null, 2)
-        .replace(/"/g, '')
-        .replace(/:/g, ': ')
-        .replace(/,/g, '')
-        .replace(/\[/g, '\n    - ')
-        .replace(/\]/g, '')
-        .replace(/{/g, '')
-        .replace(/}/g, '');
-}
-
-async function validateDockerCompose() {
-    try {
-        const textarea = document.getElementById('composeTextarea');
-        const content = textarea ? textarea.value : '';
-        
-        const response = await fetch('/api/docker/validate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ content: content })
-        });
-        
-        const data = await response.json();
-        const resultDiv = document.getElementById('validationResult');
-        
-        if (data.valid) {
-            resultDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> ' + data.message + '</div>';
-        } else {
-            resultDiv.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> ' + data.message + '</div>';
-        }
-        
-        resultDiv.style.display = 'block';
-        
-        // Hide validation result after 5 seconds
-        setTimeout(() => {
-            resultDiv.style.display = 'none';
-        }, 5000);
-        
-    } catch (error) {
-        showError('Error validating Docker Compose: ' + error.message);
-    }
-}
-
-async function fixFormatting() {
-    try {
-        const response = await fetch('/api/docker/fix-formatting', {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showSuccess('Docker Compose formatting fixed successfully');
-            loadDockerCompose(); // Reload the content
-        } else {
-            showError('Failed to fix formatting: ' + data.error);
-        }
-    } catch (error) {
-        showError('Error fixing formatting: ' + error.message);
-    }
-}
-
-// Network management functions
-async function loadNetworks() {
-    try {
-        const response = await fetch('/api/docker/networks');
-        const data = await response.json();
-        
-        if (data.success) {
-            displayNetworks(data.networks);
-        } else {
-            showError('Failed to load networks: ' + data.error);
-        }
-    } catch (error) {
-        showError('Error loading networks: ' + error.message);
-    }
-}
-
-function displayNetworks(networks) {
-    const container = document.getElementById('networksCardContent');
-    const loadingElement = document.getElementById('loadingNetworks');
-    const noNetworksElement = document.getElementById('noNetworks');
-    
-    if (!container) return;
-    
-    if (loadingElement) loadingElement.style.display = 'none';
-    
-    if (Object.keys(networks).length === 0) {
-        if (noNetworksElement) noNetworksElement.style.display = 'block';
-        container.innerHTML = '<div class="col-12 text-center text-muted py-4"><i class="fas fa-info-circle fa-2x mb-2"></i><p>No networks configured</p></div>';
-        return;
-    }
-    
-    if (noNetworksElement) noNetworksElement.style.display = 'none';
-    
-    let html = '';
-    Object.entries(networks).forEach(([networkName, network]) => {
-        const driver = network.driver || 'bridge';
-        const scope = network.scope || 'local';
-        const internal = network.internal ? 'Yes' : 'No';
-        
-        html += `
-            <div class="col-12 col-lg-6 mb-3">
-                <div class="card h-100 network-card d-flex flex-column">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">
-                            <i class="fas fa-network-wired me-2"></i>${networkName}
-                        </h6>
-                        <span class="badge bg-info">
-                            <i class="fas fa-layer-group"></i> ${driver}
-                        </span>
-                    </div>
-                    <div class="card-body flex-grow-1 d-flex flex-column">
-                        <div class="flex-grow-1">
-                            <div class="row g-2">
-                                <div class="col-12">
-                                    <small class="text-muted d-block">
-                                        <strong><i class="fas fa-cogs me-1"></i>Driver:</strong>
-                                    </small>
-                                    <span class="small">${driver}</span>
-                                </div>
-                                <div class="col-12">
-                                    <small class="text-muted d-block">
-                                        <strong><i class="fas fa-globe me-1"></i>Scope:</strong>
-                                    </small>
-                                    <span class="small">${scope}</span>
-                                </div>
-                                <div class="col-12">
-                                    <small class="text-muted d-block">
-                                        <strong><i class="fas fa-lock me-1"></i>Internal:</strong>
-                                    </small>
-                                    <span class="badge ${internal === 'Yes' ? 'bg-warning' : 'bg-success'}">${internal}</span>
-                                </div>
-                                ${network.subnet ? `
-                                <div class="col-12">
-                                    <small class="text-muted d-block">
-                                        <strong><i class="fas fa-sitemap me-1"></i>Subnet:</strong>
-                                    </small>
-                                    <code class="small">${network.subnet}</code>
-                                </div>
-                                ` : ''}
-                                ${network.gateway ? `
-                                <div class="col-12">
-                                    <small class="text-muted d-block">
-                                        <strong><i class="fas fa-route me-1"></i>Gateway:</strong>
-                                    </small>
-                                    <code class="small">${network.gateway}</code>
-                                </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                        <div class="mt-auto">
-                            <div class="row g-1">
-                                <div class="col-6">
-                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="editNetwork('${networkName}')" title="Edit Network">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                </div>
-                                <div class="col-6">
-                                    <button class="btn btn-outline-danger btn-sm w-100" onclick="deleteNetwork('${networkName}')" title="Remove Network">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    
-    container.innerHTML = html;
-}
-
-function showAddNetworkModal() {
-    const modal = new bootstrap.Modal(document.getElementById('addNetworkModal'));
-    modal.show();
-}
-
-function openStackModal() {
-    const modal = new bootstrap.Modal(document.getElementById('stackManagementModal'));
-    modal.show();
-}
-
-// Function to show the networks management modal
-function showNetworksModal() {
-    const modal = new bootstrap.Modal(document.getElementById('networksModal'));
-    modal.show();
-    
-    // Load networks into the modal
-    loadNetworksInModal();
-}
-
-// Load networks specifically for the modal
-async function loadNetworksInModal() {
-    try {
-        const response = await fetch('/api/docker/networks');
-        const data = await response.json();
-        
-        if (data.success) {
-            displayNetworksInModal(data.networks);
-        } else {
-            showError('Failed to load networks: ' + data.error);
-        }
-    } catch (error) {
-        showError('Error loading networks: ' + error.message);
-    }
-}
-
-function displayNetworksInModal(networks) {
-    const container = document.getElementById('modalNetworksList');
-    const loadingElement = document.getElementById('modalLoadingNetworks');
-    const noNetworksElement = document.getElementById('modalNoNetworks');
-    
-    if (!container) return;
-    
-    if (loadingElement) loadingElement.style.display = 'none';
-    
-    if (Object.keys(networks).length === 0) {
-        if (noNetworksElement) noNetworksElement.style.display = 'block';
-        container.innerHTML = '';
-        return;
-    }
-    
-    if (noNetworksElement) noNetworksElement.style.display = 'none';
-    
-    let html = '<div class="list-group">';
-    Object.entries(networks).forEach(([networkName, network]) => {
-        html += 
-            '<div class="list-group-item d-flex justify-content-between align-items-center">' +
-                '<div>' +
-                    '<div class="fw-semibold">' + networkName + '</div>' +
-                    '<small class="text-muted">' +
-                        '<i class="fas fa-network-wired me-1"></i>' +
-                        'Driver: ' + (network.driver || 'bridge') +
-                    '</small>' +
-                '</div>' +
-                '<div class="btn-group btn-group-sm">' +
-                    '<button class="btn btn-outline-primary" onclick="editNetwork(\'' + networkName + '\')" title="Edit network">' +
-                        '<i class="fas fa-edit"></i>' +
-                    '</button>' +
-                    '<button class="btn btn-outline-danger" onclick="deleteNetwork(\'' + networkName + '\')" title="Delete network">' +
-                        '<i class="fas fa-trash"></i>' +
-                    '</button>' +
-                '</div>' +
-            '</div>';
-    });
-    html += '</div>';
-    
-    container.innerHTML = html;
-}
-
-async function createNetworkFromModal() {
-    const name = document.getElementById('networkName').value.trim();
-    const driver = document.getElementById('networkDriver').value;
-    
-    if (!name) {
-        showError('Network name is required');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/docker/networks', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ name: name, driver: driver })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showSuccess('Network "' + name + '" created successfully');
-            loadNetworks();
-            
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('addNetworkModal'));
-            modal.hide();
-            
-            // Clear form
-            document.getElementById('networkName').value = '';
-            document.getElementById('networkDriver').value = 'bridge';
-        } else {
-            showError('Failed to create network: ' + data.error);
-        }
-    } catch (error) {
-        showError('Error creating network: ' + error.message);
-    }
-}
-
-async function deleteNetwork(networkName) {
-    if (!confirm('Are you sure you want to delete the network "' + networkName + '"?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/docker/networks/' + networkName, { method: 'DELETE' });
-        const data = await response.json();
-        
-        if (data.success) {
-            showSuccess('Network "' + networkName + '" deleted successfully');
-            loadNetworks();
-        } else {
-            showError('Failed to delete network: ' + data.error);
-        }
-    } catch (error) {
-        showError('Error deleting network: ' + error.message);
-    }
-}
-
-// Utility functions for notifications
-function showSuccess(message) {
-    showNotification('success', message);
-}
-
-function showError(message) {
-    showNotification('danger', message);
-}
-
-function showInfo(message) {
-    showNotification('info', message);
-}
-
-function showNotification(type, message) {
-    // Create toast notification
-    const toastContainer = document.getElementById('toastContainer') || createToastContainer();
-    
-    const toast = document.createElement('div');
-    toast.className = 'toast align-items-center text-white bg-' + type + ' border-0';
-    toast.setAttribute('role', 'alert');
-    
-    const iconClass = type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle';
-    toast.innerHTML = 
-        '<div class="d-flex">' +
-            '<div class="toast-body">' +
-                '<i class="fas fa-' + iconClass + '"></i> ' +
-                message +
-            '</div>' +
-            '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' +
-        '</div>';
-    
-    toastContainer.appendChild(toast);
-    const bsToast = new bootstrap.Toast(toast);
-    bsToast.show();
-    
-    // Remove toast after it's hidden
-    toast.addEventListener('hidden.bs.toast', () => {
-        toast.remove();
-    });
-}
-
-function createToastContainer() {
-    const container = document.createElement('div');
-    container.id = 'toastContainer';
-    container.className = 'toast-container position-fixed top-0 end-0 p-3';
-    container.style.zIndex = '9999'; // Higher z-index to appear above headers
-    document.body.appendChild(container);
-    return container;
-}
-
-// Delete service function
-async function deleteService(serviceName) {
-    if (!confirm(`Are you sure you want to delete the service "${serviceName}"? This will remove it from the docker-compose.yml file.`)) {
-        return;
-    }
-    
-    try {
-        showInfo(`Deleting service: ${serviceName}...`);
-        
-        const response = await fetch(`/api/docker-compose/remove/${serviceName}`, { 
-            method: 'DELETE' 
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            showSuccess(`Service "${serviceName}" deleted successfully`);
-            
-            // Remove from currentServices if it exists
-            if (currentServices && currentServices[serviceName]) {
-                delete currentServices[serviceName];
-            }
-            
-            // Close any open modals for this service
-            const serviceModal = document.getElementById('serviceEditModal');
-            if (serviceModal) {
-                const modal = bootstrap.Modal.getInstance(serviceModal);
-                if (modal) modal.hide();
-            }
-            
-            // Refresh displays
-            loadServices(); // Refresh the services list
-            loadDockerCompose(); // Refresh the compose editor if open
-        } else {
-            showError(`Failed to delete service "${serviceName}": ${data.error}`);
-        }
-    } catch (error) {
-        showError(`Error deleting service "${serviceName}": ${error.message}`);
-    }
-}
-
-function loadVisualEditor() {
-    console.log('loadVisualEditor called');
-    const container = document.getElementById('stackVisualEditor');
-    if (!container) {
-        console.error('Visual editor container not found');
-        return;
-    }
-    
-    container.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div><p>Loading visual editor...</p></div>';
-    
-    // First try to use existing currentServices data
-    if (currentServices && Object.keys(currentServices).length > 0) {
-        console.log('Using existing currentServices data for visual editor');
-        displayVisualServices();
-        return;
-    }
-    
-    // Fallback: try to fetch services data via API
-    console.log('Fetching services data for visual editor...');
-    fetch('/api/docker/services')
-        .then(response => {
-            console.log('Visual editor API response status:', response.status);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('Visual editor API data received:', data);
-            if (data.success && data.services && Object.keys(data.services).length > 0) {
-                currentServices = data.services;
-                displayVisualServices();
-            } else {
-                container.innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle"></i> No services configured. Use "Add Service" to create your first service.</div>';
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching services for visual editor:', error);
-            
-            // Also try server-side YAML data if available
-            if (typeof composeYaml !== 'undefined' && composeYaml) {
-                try {
-                    console.log('Attempting to parse server-side compose data for visual editor');
-                    const yamlData = jsyaml.load(composeYaml);
-                    if (yamlData && yamlData.services) {
-                        currentServices = yamlData.services;
-                        displayVisualServices();
-                        return;
-                    }
-                } catch (parseError) {
-                    console.error('Error parsing server-side YAML for visual editor:', parseError);
-                }
-            }
-            container.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Unable to load services. Please try refreshing the page.</div>';
-        });
-}
-
-function displayVisualServices() {
-    const container = document.getElementById('stackVisualEditor');
-    if (!container) return;
-    
-    let html = '';
-    
-    Object.entries(currentServices).forEach(([serviceName, service]) => {
-        html += createVisualServiceCard(serviceName, service);
-    });
-    
-    container.innerHTML = html;
-}
-
-function createVisualServiceCard(serviceName, service) {
-    const ports = Array.isArray(service.ports) ? service.ports.join(', ') : 'None';
-    const volumes = Array.isArray(service.volumes) ? service.volumes.join(', ') : 'None';
-    const networks = Array.isArray(service.networks) ? service.networks.join(', ') : 'None';
-    const command = service.command ? (Array.isArray(service.command) ? service.command.join(' ') : service.command) : 'None';
-    
-    return `
-        <div class="card mb-3 service-visual-card" data-service="${serviceName}">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="mb-0"><i class="fas fa-cube"></i> ${serviceName}</h6>
-                <button class="btn btn-outline-primary btn-sm" onclick="editServiceVisual('${serviceName}')" title="Edit Service">
-                    <i class="fas fa-edit"></i>
-                </button>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-2">
-                            <small class="text-muted d-block"><strong><i class="fas fa-box me-1"></i>Image:</strong></small>
-                            <code class="small text-break">${service.image || 'N/A'}</code>
-                        </div>
-                        <div class="mb-2">
-                            <small class="text-muted d-block"><strong><i class="fas fa-tag me-1"></i>Container:</strong></small>
-                            <span class="small">${service.container_name || serviceName}</span>
-                        </div>
-                        <div class="mb-2">
-                            <small class="text-muted d-block"><strong><i class="fas fa-redo me-1"></i>Restart:</strong></small>
-                            <span class="badge bg-secondary">${service.restart || 'unless-stopped'}</span>
-                        </div>
-                        <div class="mb-2">
-                            <small class="text-muted d-block"><strong><i class="fas fa-info-circle me-1"></i>Status:</strong></small>
-                            <span class="badge bg-${service.status === 'running' ? 'success' : service.status === 'stopped' ? 'danger' : 'secondary'}">${service.status || 'Unknown'}</span>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-2">
-                            <small class="text-muted d-block"><strong><i class="fas fa-network-wired me-1"></i>Ports:</strong></small>
-                            <span class="small text-break">${ports}</span>
-                        </div>
-                        <div class="mb-2">
-                            <small class="text-muted d-block"><strong><i class="fas fa-sitemap me-1"></i>Networks:</strong></small>
-                            <span class="small text-break">${networks}</span>
-                        </div>
-                        <div class="mb-2">
-                            <small class="text-muted d-block"><strong><i class="fas fa-hdd me-1"></i>Volumes:</strong></small>
-                            <span class="small text-break">${volumes}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-12">
-                        <div class="mb-2">
-                            <small class="text-muted d-block"><strong><i class="fas fa-terminal me-1"></i>Command:</strong></small>
-                            <code class="small text-break">${command}</code>
-                        </div>
-                    </div>
-                </div>
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <div class="row g-1">
-                            <div class="col-6">
-                                <button class="btn btn-${service.status === 'running' ? 'primary' : 'success'} btn-sm w-100" onclick="${service.status === 'running' ? 'restartService' : (service.status === 'stopped' || service.status === 'created' || service.status === 'exited') ? 'startService' : 'createService'}('${serviceName}')" title="${service.status === 'running' ? 'Restart' : (service.status === 'stopped' || service.status === 'created' || service.status === 'exited') ? 'Start' : 'Create'} Container">
-                                    <i class="fas fa-${service.status === 'running' ? 'redo' : (service.status === 'stopped' || service.status === 'created' || service.status === 'exited') ? 'play' : 'plus'}"></i> ${service.status === 'running' ? 'Restart' : (service.status === 'stopped' || service.status === 'created' || service.status === 'exited') ? 'Start' : 'Create'}
+                            <div class="d-flex align-items-center gap-2">
+                                <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); ${buttonAction}('${serviceName}')" title="${buttonText} Container">
+                                    <i class="fas fa-${buttonIcon}"></i> ${buttonText}
                                 </button>
-                            </div>
-                            <div class="col-6">
-                                <button class="btn btn-info btn-sm w-100" onclick="validateServiceConfig('${serviceName}')" title="Validate Config">
+                                <button class="btn btn-info btn-sm" onclick="event.stopPropagation(); validateServiceConfig('${serviceName}')" title="Validate Config">
                                     <i class="fas fa-check-circle"></i> Validate
                                 </button>
-                            </div>
-                            <div class="col-6">
-                                <button class="btn btn-outline-primary btn-sm w-100" onclick="editServiceVisual('${serviceName}')" title="Edit Service">
+                                <button class="btn btn-outline-primary btn-sm" onclick="event.stopPropagation(); editServiceVisual('${serviceName}')" title="Edit Service">
                                     <i class="fas fa-edit"></i> Edit
                                 </button>
-                            </div>
-                            <div class="col-6">
-                                <button class="btn btn-outline-danger btn-sm w-100" onclick="deleteService('${serviceName}')" title="Remove Service">
+                                <button class="btn btn-outline-danger btn-sm" onclick="event.stopPropagation(); deleteService('${serviceName}')" title="Remove Service">
                                     <i class="fas fa-times"></i> Remove
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function editServiceVisual(serviceName) {
-    console.log('editServiceVisual called with serviceName:', serviceName);
-    
-    try {
-        showServiceEditModal(serviceName);
-    } catch (error) {
-        console.error('Error in editServiceVisual:', error);
-        showError('Error opening service editor: ' + error.message);
-    }
-}
-
-function addUniquePortMapping() {
-    const hostPortInput = document.getElementById('uniqueHostPort');
-    const portsTextarea = document.getElementById('servicePorts');
-    
-    if (!hostPortInput || !portsTextarea) return;
-    
-    const hostPort = parseInt(hostPortInput.value);
-    if (!hostPort || hostPort < 1024 || hostPort > 65535) {
-        showError('Please enter a valid port number between 1024 and 65535');
-        return;
-    }
-    
-    // Check if port is already used
-    const existingPorts = portsTextarea.value.split('\n').filter(p => p.trim());
-    const portExists = existingPorts.some(port => {
-        const [host] = port.split(':');
-        return parseInt(host) === hostPort;
-    });
-    
-    if (portExists) {
-        showError(`Port ${hostPort} is already mapped`);
-        return;
-    }
-    
-    // Add the port mapping - use 8080 as the standard container port for FreqTrade
-    const newMapping = `${hostPort}:8080`;
-    if (portsTextarea.value.trim()) {
-        portsTextarea.value += '\n' + newMapping;
-    } else {
-        portsTextarea.value = newMapping;
-    }
-    
-    // Update to next available port for next mapping
-    updateUniquePortInput();
-    
-    showSuccess(`Added port mapping: ${newMapping}`);
-}
-
-async function saveNewService() {
-    try {
-        const serviceName = document.getElementById('serviceName').value.trim();
-        const serviceImage = document.getElementById('serviceImage').value.trim();
-        const containerName = document.getElementById('containerName').value.trim() || serviceName;
-        const restartPolicy = document.getElementById('restartPolicy').value;
-        const ports = document.getElementById('servicePorts').value.split('\n').filter(p => p.trim());
-        const volumes = document.getElementById('serviceVolumes').value.split('\n').filter(v => v.trim());
-        const command = document.getElementById('serviceCommand').value.trim();
-        const environment = document.getElementById('serviceEnvironment').value.split('\n').filter(e => e.trim() && e.includes('='));
-        
-        if (!serviceName || !serviceImage) {
-            showError('Service name and image are required');
-            return;
-        }
-        
-        // Validate service name (docker-compose naming rules)
-        if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(serviceName)) {
-            showError('Service name must start with a letter or number and contain only letters, numbers, hyphens, underscores, and periods');
-            return;
-        }
-        
-        // Check if service already exists
-        if (currentServices && currentServices[serviceName]) {
-            showError('A service with this name already exists');
-            return;
-        }
-        
-        // Create service configuration object
-        const serviceConfig = {
-            image: serviceImage,
-            container_name: containerName,
-            restart: restartPolicy
-        };
-        
-        // Add optional fields only if they have values
-        if (ports.length > 0) {
-            serviceConfig.ports = ports;
-        }
-        
-        if (volumes.length > 0) {
-            serviceConfig.volumes = volumes;
-        }
-        
-        if (command) {
-            serviceConfig.command = command;
-        }
-        
-        if (environment.length > 0) {
-            serviceConfig.environment = environment;
-        }
-        
-        // Add networks (default to freqtrade_network)
-        serviceConfig.networks = ['freqtrade_network'];
-        
-        // Send to backend API to add the service
-        const response = await fetch('/api/docker-compose/add-service', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                service_name: serviceName,
-                service_config: serviceConfig
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            // Add to current services for immediate UI update
-            currentServices[serviceName] = {
-                ...serviceConfig,
-                status: 'stopped'
-            };
-            
-            // Refresh services display
-            loadServices();
-            
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('addServiceModal'));
-            if (modal) {
-                modal.hide();
-            }
-            
-            showSuccess('Service "' + serviceName + '" added successfully to docker-compose.yml');
-        } else {
-            showError('Failed to add service: ' + data.error);
-        }
-    } catch (error) {
-        showError('Error adding service: ' + error.message);
-    }
-}
-
-function initializeViewToggle() {
-    const listViewRadio = document.getElementById('servicesListView');
-    const cardViewRadio = document.getElementById('servicesCardView');
-    
-    if (listViewRadio && cardViewRadio) {
-        listViewRadio.addEventListener('change', function() {
-            if (this.checked) {
-                switchToListView();
-            }
-        });
-        
-        cardViewRadio.addEventListener('change', function() {
-            if (this.checked) {
-                switchToCardView();
-            }
-        });
-    }
-}
-
-function initializeUnifiedTabs() {
-    console.log('Initializing unified tabs');
-    
-    // Add event listeners for tab changes
-    const tabButtons = document.querySelectorAll('#modalStackTabs button[data-bs-toggle="tab"]');
-    
-    tabButtons.forEach(button => {
-        button.addEventListener('shown.bs.tab', function(event) {
-            const targetId = event.target.getAttribute('data-bs-target');
-            console.log('Tab changed to:', targetId);
-            
-            switch(targetId) {
-                case '#modal-compose-content':
-                    console.log('Loading compose for compose tab');
-                    if (!document.getElementById('stackComposeTextarea').value || 
-                        document.getElementById('stackComposeTextarea').value.includes('# Docker Compose configuration will be loaded here...')) {
-                        loadDockerCompose();
-                    }
-                    break;
-            }
-        });
-    });
-}
-
-function initializeConfigTabs() {
-    console.log('Initializing configuration tabs');
-    
-    // Add event listeners for configuration tab changes
-    const configTabButtons = document.querySelectorAll('#configTabs button[data-bs-toggle="tab"]');
-    
-    configTabButtons.forEach(button => {
-        button.addEventListener('shown.bs.tab', function(event) {
-            const targetId = event.target.getAttribute('data-bs-target');
-            console.log('Config tab changed to:', targetId);
-            
-            switch(targetId) {
-                case '#services-content':
-                    console.log('Services tab activated');
-                    // Services are already loaded on page load
-                    break;
-                    
-                case '#networks-content':
-                    console.log('Networks tab activated - loading networks');
-                    loadNetworks();
-                    break;
-            }
-        });
-    });
-}
-
-// Action functions
-function stackStartAll() {
-    showInfo('Starting all services...');
-    // Implementation for starting all services
-}
-
-function stackStopAll() {
-    showInfo('Stopping all services...');
-    // Implementation for stopping all services
-}
-
-function stackRefresh() {
-    stackLoadServices();
-    showInfo('Services refreshed');
-}
-
-function stackStartService(serviceName) {
-    showInfo(`Starting service: ${serviceName}`);
-    // Implementation for starting specific service
-}
-
-function stackStopService(serviceName) {
-    showInfo(`Stopping service: ${serviceName}`);
-    // Implementation for stopping specific service
-}
-
-function stackServiceLogs(serviceName) {
-    showInfo(`Viewing logs for: ${serviceName}`);
-    // Implementation for viewing service logs
-}
-
-function stackAddNetwork() {
-    showInfo('Add network functionality coming soon');
-}
-
-function stackRemoveNetwork(networkName) {
-    showInfo(`Removing network: ${networkName}`);
-}
-
-function stackReloadCompose() {
-    loadDockerCompose();
-    showInfo('Compose reloaded');
-}
-
-function stackValidateCompose() {
-    const textarea = document.getElementById('stackComposeTextarea');
-    if (textarea && textarea.value) {
-        showInfo('Validating compose...');
-        
-        fetch('/api/docker-compose/validate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ yaml: textarea.value })
-        })
-        .then(response => response.json())
-        .then(data => {
-            const validationDiv = document.getElementById('stackComposeValidation');
-            if (data.valid) {
-                validationDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> Docker Compose YAML is valid</div>';
-                validationDiv.style.display = 'block';
-                showSuccess('Docker Compose YAML is valid');
-            } else {
-                validationDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> YAML validation failed: ${data.error}</div>`;
-                validationDiv.style.display = 'block';
-                showError('YAML validation failed: ' + data.error);
-            }
-        })
-        .catch(error => {
-            const validationDiv = document.getElementById('stackComposeValidation');
-            validationDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Validation error: ${error.message}</div>`;
-            validationDiv.style.display = 'block';
-            showError('Validation error: ' + error.message);
-        });
-    }
-}
-
-function stackSaveCompose() {
-    const textarea = document.getElementById('stackComposeTextarea');
-    if (textarea && textarea.value) {
-        showInfo('Saving compose...');
-        
-        fetch('/api/docker/compose', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ content: textarea.value })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showSuccess('Docker Compose file saved successfully');
-                // Refresh services display
-                displayServices();
-            } else {
-                showError('Failed to save compose file: ' + data.error);
-            }
-        })
-        .catch(error => {
-            showError('Error saving compose file: ' + error.message);
-        });
-    }
-}
-
-function stackAddService() {
-    showAddServiceModal();
-}
-
-function showAddServiceModal() {
-    // Create the modal if it doesn't exist
-    let modal = document.getElementById('addServiceModal');
-    if (!modal) {
-        createAddServiceModal();
-    }
-    
-    // Clear the form after ensuring modal exists
-    const serviceName = document.getElementById('serviceName');
-    const serviceImage = document.getElementById('serviceImage');
-    const containerName = document.getElementById('containerName');
-    const restartPolicy = document.getElementById('restartPolicy');
-    const servicePorts = document.getElementById('servicePorts');
-    const serviceVolumes = document.getElementById('serviceVolumes');
-    const serviceCommand = document.getElementById('serviceCommand');
-    const serviceEnvironment = document.getElementById('serviceEnvironment');
-    const uniqueHostPort = document.getElementById('uniqueHostPort');
-    
-    if (serviceName) serviceName.value = '';
-    if (serviceImage) serviceImage.value = 'freqtradeorg/freqtrade:stable';
-    if (containerName) containerName.value = '';
-    if (restartPolicy) restartPolicy.value = 'unless-stopped';
-    if (servicePorts) servicePorts.value = '';
-    if (serviceVolumes) serviceVolumes.value = '';
-    if (serviceCommand) serviceCommand.value = '';
-    if (serviceEnvironment) serviceEnvironment.value = '';
-    
-    // Set unique default port using centralized port management
-    updateUniquePortInput();
-    
-    // Show the modal
-    const bsModal = new bootstrap.Modal(document.getElementById('addServiceModal'));
-    bsModal.show();
-}
-
-function createAddServiceModal() {
-    const modalHtml = `
-        <div class="modal fade" id="addServiceModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title"><i class="fas fa-plus"></i> Add New Service</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="addServiceForm">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="serviceName" class="form-label">Service Name *</label>
-                                        <input type="text" class="form-control" id="serviceName" required placeholder="e.g., freqtrade-bot">
-                                        <div class="form-text">Unique name for the service in docker-compose</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="serviceImage" class="form-label">Docker Image *</label>
-                                        <input type="text" class="form-control" id="serviceImage" value="freqtradeorg/freqtrade:stable" required>
-                                        <div class="form-text">Docker image to use for this service</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="containerName" class="form-label">Container Name</label>
-                                        <input type="text" class="form-control" id="containerName" placeholder="Leave empty to use service name">
-                                        <div class="form-text">Custom container name (optional)</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="restartPolicy" class="form-label">Restart Policy</label>
-                                        <select class="form-select" id="restartPolicy">
-                                            <option value="no">No</option>
-                                            <option value="always">Always</option>
-                                            <option value="unless-stopped" selected>Unless Stopped</option>
-                                            <option value="on-failure">On Failure</option>
-                                        </select>
-                                        <div class="form-text">When to restart the container</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="servicePorts" class="form-label">Ports</label>
-                                        <div class="row g-2 mb-2">
-                                            <div class="col-8">
-                                                <input type="number" class="form-control" id="uniqueHostPort" placeholder="8080" min="1024" max="65535" value="8080">
-                                            </div>
-                                            <div class="col-4">
-                                                <button type="button" class="btn btn-outline-primary w-100" onclick="addUniquePortMapping()">
-                                                    <i class="fas fa-plus"></i> Add 8080
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <textarea class="form-control" id="servicePorts" rows="3" placeholder="host:container port mappings (e.g., 8080:8080)"></textarea>
-                                        <div class="form-text">Port mappings, one per line (host:container). Use the input above to add unique host port mappings to 8080.</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="serviceVolumes" class="form-label">Volumes</label>
-                                <textarea class="form-control" id="serviceVolumes" rows="3" placeholder="./user_data:/freqtrade/user_data&#10;./config:/freqtrade/config:ro"></textarea>
-                                <div class="form-text">Volume mounts, one per line (host:container or volume:container)</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="serviceCommand" class="form-label">Command</label>
-                                <input type="text" class="form-control" id="serviceCommand" placeholder="trade --config /freqtrade/user_data/config.json">
-                                <div class="form-text">Override the default command (optional)</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="serviceEnvironment" class="form-label">Environment Variables</label>
-                                <textarea class="form-control" id="serviceEnvironment" rows="2" placeholder="FREQTRADE_CONFIG=/freqtrade/user_data/config.json&#10;LOG_LEVEL=INFO"></textarea>
-                                <div class="form-text">Environment variables, one per line (KEY=value)</div>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-success" onclick="saveNewService()">
-                            <i class="fas fa-plus"></i> Add Service
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Remove existing modal if present
-    const existingModal = document.getElementById('addServiceModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    // Add modal to DOM
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-}
-
-function editNetwork(networkName) {
-    showNetworkEditModal(networkName);
-}
-
-function showNetworkEditModal(networkName) {
-    // Create the network edit modal dynamically
-    const modalHtml = `
-        <div class="modal fade" id="networkEditModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            <i class="fas fa-network-wired"></i> Edit Network: ${networkName}
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <h6 class="mb-3">Network Configuration</h6>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="editNetworkName" class="form-label">Network Name *</label>
-                                        <input type="text" class="form-control" id="editNetworkName" value="${networkName}" readonly>
-                                        <div class="form-text">Network name cannot be changed</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="editNetworkDriver" class="form-label">Driver</label>
-                                        <select class="form-select" id="editNetworkDriver">
-                                            <option value="bridge">bridge</option>
-                                            <option value="host">host</option>
-                                            <option value="overlay">overlay</option>
-                                            <option value="macvlan">macvlan</option>
-                                            <option value="ipvlan">ipvlan</option>
-                                            <option value="none">none</option>
-                                        </select>
-                                        <div class="form-text">Network driver type</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="editNetworkInternal" class="form-label">Internal Network</label>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="editNetworkInternal">
-                                            <label class="form-check-label" for="editNetworkInternal">
-                                                Restrict external access to this network
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="editNetworkSubnet" class="form-label">Subnet (CIDR)</label>
-                                        <input type="text" class="form-control" id="editNetworkSubnet" placeholder="172.20.0.0/16">
-                                        <div class="form-text">Network subnet in CIDR notation (optional)</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="editNetworkGateway" class="form-label">Gateway</label>
-                                        <input type="text" class="form-control" id="editNetworkGateway" placeholder="172.20.0.1">
-                                        <div class="form-text">Gateway IP address (optional)</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="editNetworkAttachable" class="form-label">Attachable</label>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="editNetworkAttachable">
-                                            <label class="form-check-label" for="editNetworkAttachable">
-                                                Allow manual container attachment
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="editNetworkLabels" class="form-label">Labels</label>
-                                <textarea class="form-control" id="editNetworkLabels" rows="3" placeholder="environment=production&#10;team=devops"></textarea>
-                                <div class="form-text">Network labels, one per line (key=value)</div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="editNetworkOptions" class="form-label">Driver Options</label>
-                                <textarea class="form-control" id="editNetworkOptions" rows="3" placeholder="com.docker.network.bridge.name=br-custom&#10;com.docker.network.driver.mtu=1500"></textarea>
-                                <div class="form-text">Driver-specific options, one per line (key=value)</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-danger me-auto" onclick="deleteNetwork('${networkName}')">
-                            <i class="fas fa-trash"></i> Delete Network
-                        </button>
-                        <button type="button" class="btn btn-primary" onclick="saveNetworkChanges('${networkName}')">
-                            <i class="fas fa-save"></i> Save Changes
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Remove existing modal if present
-    const existingModal = document.getElementById('networkEditModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    // Add new modal to body
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // Show the modal
-    const modal = new bootstrap.Modal(document.getElementById('networkEditModal'));
-    modal.show();
-    
-    // Load the network configuration
-    loadNetworkConfiguration(networkName);
-}
-
-function loadNetworkConfiguration(networkName) {
-    // Load network configuration from the backend
-    fetch(`/api/docker/networks/${networkName}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                populateNetworkEditForm(data.network);
-            } else {
-                showError('Failed to load network configuration: ' + data.error);
-            }
-        })
-        .catch(error => {
-            showError('Error loading network configuration: ' + error.message);
-        });
-}
-
-function populateNetworkEditForm(networkConfig) {
-    // Populate the form with network configuration
-    document.getElementById('editNetworkDriver').value = networkConfig.driver || 'bridge';
-    
-    // Handle IPAM configuration
-    if (networkConfig.ipam && networkConfig.ipam.config && networkConfig.ipam.config.length > 0) {
-        const ipamConfig = networkConfig.ipam.config[0];
-        if (ipamConfig.subnet) {
-            document.getElementById('editNetworkSubnet').value = ipamConfig.subnet;
-        }
-        if (ipamConfig.gateway) {
-            document.getElementById('editNetworkGateway').value = ipamConfig.gateway;
-        }
-    }
-    
-    // Handle options
-    if (networkConfig.internal) {
-        document.getElementById('editNetworkInternal').checked = networkConfig.internal;
-    }
-    if (networkConfig.attachable) {
-        document.getElementById('editNetworkAttachable').checked = networkConfig.attachable;
-    }
-    
-    // Handle labels
-    if (networkConfig.labels) {
-        const labelsArray = Object.entries(networkConfig.labels).map(([key, value]) => `${key}=${value}`);
-        document.getElementById('editNetworkLabels').value = labelsArray.join('\n');
-    }
-    
-    // Handle driver options
-    if (networkConfig.options) {
-        const optionsArray = Object.entries(networkConfig.options).map(([key, value]) => `${key}=${value}`);
-        document.getElementById('editNetworkOptions').value = optionsArray.join('\n');
-    }
-}
-
-function saveNetworkChanges(networkName) {
-    const networkData = {
-        name: networkName,
-        driver: document.getElementById('editNetworkDriver').value,
-        internal: document.getElementById('editNetworkInternal').checked,
-        attachable: document.getElementById('editNetworkAttachable').checked
-    };
-    
-    // Handle IPAM configuration
-    const subnet = document.getElementById('editNetworkSubnet').value.trim();
-    const gateway = document.getElementById('editNetworkGateway').value.trim();
-    if (subnet || gateway) {
-        networkData.ipam = {
-            config: [{}]
-        };
-        if (subnet) networkData.ipam.config[0].subnet = subnet;
-        if (gateway) networkData.ipam.config[0].gateway = gateway;
-    }
-    
-    // Handle labels
-    const labelsText = document.getElementById('editNetworkLabels').value.trim();
-    if (labelsText) {
-        networkData.labels = {};
-        labelsText.split('\n').forEach(line => {
-            const [key, value] = line.split('=');
-            if (key && value) {
-                networkData.labels[key.trim()] = value.trim();
-            }
-        });
-    }
-    
-    // Handle driver options
-    const optionsText = document.getElementById('editNetworkOptions').value.trim();
-    if (optionsText) {
-        networkData.options = {};
-        optionsText.split('\n').forEach(line => {
-            const [key, value] = line.split('=');
-            if (key && value) {
-                networkData.options[key.trim()] = value.trim();
-            }
-        });
-    }
-    
-    fetch(`/api/docker/networks/${networkName}`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(networkData)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showSuccess('Network updated successfully');
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('networkEditModal'));
-            modal.hide();
-            // Refresh networks display
-            loadNetworks();
-        } else {
-            showError('Failed to update network: ' + data.error);
-        }
-    })
-    .catch(error => {
-        showError('Error updating network: ' + error.message);
-    });
-}
-
-function showServiceEditModal(serviceName) {
-    console.log('Creating service edit modal for:', serviceName);
-    
-    try {
-        // Create the service edit modal dynamically
-        const modalHtml = `
-        <div class="modal fade" id="serviceEditModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            <i class="fas fa-edit"></i> Edit Service: ${serviceName}
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- Navigation Tabs -->
-                        <ul class="nav nav-tabs mb-3" id="serviceEditTabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="service-visual-tab" data-bs-toggle="tab" data-bs-target="#service-visual-content" type="button" role="tab">
-                                    <i class="fas fa-eye"></i> Visual Editor
+                                <button class="btn btn-link btn-sm p-0 ms-2" onclick="event.stopPropagation(); toggleServiceCard('${serviceName}')" title="Expand/Collapse">
+                                    <i id="service-card-toggle-icon-${serviceName}" class="fas fa-chevron-down"></i>
                                 </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="service-yaml-tab" data-bs-toggle="tab" data-bs-target="#service-yaml-content" type="button" role="tab">
-                                    <i class="fas fa-file-code"></i> YAML Editor
-                                </button>
-                            </li>
-                        </ul>
-
-                        <!-- Tab Content -->
-                        <div class="tab-content" id="serviceEditTabContent">
-                            <!-- Visual Editor Tab -->
-                            <div class="tab-pane fade show active" id="service-visual-content" role="tabpanel">
-                                <div class="mb-3">
-                                    <h6 class="mb-3">Service Configuration</h6>
-                                    
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="editServiceImage" class="form-label">Container Image *</label>
-                                                <input type="text" class="form-control" id="editServiceImage" placeholder="freqtradeorg/freqtrade:stable">
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="editServiceContainer" class="form-label">Container Name</label>
-                                                <input type="text" class="form-control" id="editServiceContainer" placeholder="${serviceName}">
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="editServiceRestart" class="form-label">Restart Policy</label>
-                                                <select class="form-select" id="editServiceRestart">
-                                                    <option value="no">no</option>
-                                                    <option value="always">always</option>
-                                                    <option value="unless-stopped" selected>unless-stopped</option>
-                                                    <option value="on-failure">on-failure</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="mb-3">
-                                                <label for="editServicePorts" class="form-label">Port Mappings</label>
-                                                <textarea class="form-control" id="editServicePorts" rows="3" placeholder="8080:8080&#10;8081:8081"></textarea>
-                                                <div class="form-text">Port mappings, one per line (host:container)</div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="editServiceVolumes" class="form-label">Volume Mounts</label>
-                                                <textarea class="form-control" id="editServiceVolumes" rows="3" placeholder="./user_data:/freqtrade/user_data&#10;./logs:/freqtrade/logs"></textarea>
-                                                <div class="form-text">Volume mounts, one per line (host:container)</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="mb-3">
-                                        <label for="editServiceCommand" class="form-label">Command</label>
-                                        <input type="text" class="form-control" id="editServiceCommand" placeholder="trade --config /freqtrade/user_data/config.json">
-                                        <div class="form-text">Override the default command (optional)</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="editServiceEnvironment" class="form-label">Environment Variables</label>
-                                        <textarea class="form-control" id="editServiceEnvironment" rows="3" placeholder="FREQTRADE_CONFIG=/freqtrade/user_data/config.json&#10;LOG_LEVEL=INFO"></textarea>
-                                        <div class="form-text">Environment variables, one per line (KEY=value)</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="editServiceNetworks" class="form-label">Networks</label>
-                                        <input type="text" class="form-control" id="editServiceNetworks" placeholder="freqtrade_network, default">
-                                        <div class="form-text">Networks to attach to, comma-separated</div>
-                                    </div>
-                                </div>
                             </div>
-
-                            <!-- YAML Editor Tab -->
-                            <div class="tab-pane fade" id="service-yaml-content" role="tabpanel">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="mb-0">Service YAML Configuration</h6>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary" onclick="reloadServiceYaml('${serviceName}')">
-                                            <i class="fas fa-sync"></i> Reload
-                                        </button>
-                                        <button class="btn btn-outline-warning" onclick="validateServiceYaml()">
-                                            <i class="fas fa-check"></i> Validate
-                                        </button>
+                        </div>
+                        <div id="service-card-body-${serviceName}" class="collapse">
+                            <div class="card-body flex-grow-1 d-flex flex-column">
+                                <div class="flex-grow-1">
+                                    <div class="row g-2">
+                                        {% for service_name, service in services.items() %}
+                                            <div class="col-12">
+                                                <small class="text-muted d-block">
+                                                    <strong><i class="fas fa-box me-1"></i>Image:</strong>
+                                                </small>
+                                                <code class="small">{{ service.image or 'N/A' }}</code>
+                                            </div>
+                                            <div class="col-12">
+                                                <small class="text-muted d-block">
+                                                    <strong><i class="fas fa-tag me-1"></i>Container:</strong>
+                                                </small>
+                                                <span class="small">{{ service.container_name or service_name }}</span>
+                                            </div>
+                                            {% if service.ports %}
+                                            <div class="col-12">
+                                                <small class="text-muted d-block">
+                                                    <strong><i class="fas fa-network-wired me-1"></i>Ports:</strong>
+                                                </small>
+                                                <div>
+                                                    {% for port in service.ports %}
+                                                        <span class="badge bg-info me-1 mb-1">{{ port }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                                <div id="port-consistency-{{ service_name }}" class="mt-1">
+                                                    <!-- Port consistency status will be loaded here -->
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                            <div class="col-12">
+                                                <small class="text-muted d-block">
+                                                    <strong><i class="fas fa-robot me-1"></i>Strategy:</strong>
+                                                </small>
+                                                <span class="small">{{ service.strategy or 'N/A' }}</span>
+                                                <div id="strategy-validation-{{ service_name }}" class="mt-1">
+                                                    <!-- Strategy validation status will be loaded here -->
+                                                </div>
+                                            </div>
+                                            <div class="col-12">
+                                                <small class="text-muted d-block">
+                                                    <strong><i class="fas fa-cog me-1"></i>Config:</strong>
+                                                </small>
+                                                <span class="small">{{ service.config_file or 'N/A' }}</span>
+                                                <div id="config-validation-{{ service_name }}" class="mt-1">
+                                                    <!-- Config validation status will be loaded here -->
+                                                </div>
+                                            </div>
+                                            {% if service.command %}
+                                            <div class="col-12">
+                                                <small class="text-muted d-block">
+                                                    <strong><i class="fas fa-terminal me-1"></i>Command:</strong>
+                                                </small>
+                                                <code class="small text-break">{{ service.command if service.command is string else service.command|join(' ') }}</code>
+                                            </div>
+                                            {% endif %}
+                                            {% if service.restart %}
+                                            <div class="col-12">
+                                                <small class="text-muted d-block">
+                                                    <strong><i class="fas fa-redo me-1"></i>Restart Policy:</strong>
+                                                </small>
+                                                <span class="badge bg-secondary">{{ service.restart }}</span>
+                                            </div>
+                                            {% endif %}
+                                        {% endfor %}
                                     </div>
                                 </div>
-                                
-                                <div id="serviceYamlEditor">
-                                    <textarea id="serviceYamlTextarea" class="form-control" rows="15" style="font-family: 'Courier New', monospace;" placeholder="# Service YAML configuration will be loaded here..."></textarea>
+                                <div class="mt-auto">
+                                    <div class="row g-1">
+                                        <div class="col-6">
+                                            <button class="btn btn-primary btn-sm w-100" onclick="{{ button_action }}('{{ service_name }}')" title="{{ button_text }} Container">
+                                                <i class="fas fa-{{ button_icon }}"></i> {{ button_text }}
+                                            </button>
+                                        </div>
+                                        <div class="col-6">
+                                            <button class="btn btn-info btn-sm w-100" onclick="validateServiceConfig('{{ service_name }}')" title="Validate Config">
+                                                <i class="fas fa-check-circle"></i> Validate
+                                            </button>
+                                        </div>
+                                        <div class="col-6">
+                                            <button class="btn btn-outline-primary btn-sm w-100" onclick="editServiceVisual('{{ service_name }}')" title="Edit Service">
+                                                <i class="fas fa-edit"></i> Edit
+                                            </button>
+                                        </div>
+                                        <div class="col-6">
+                                            <button class="btn btn-outline-danger btn-sm w-100" onclick="deleteService('{{ service_name }}')" title="Remove Service">
+                                                <i class="fas fa-times"></i> Remove
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                                
-                                <div id="serviceYamlValidation" class="mt-2" style="display: none;"></div>
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-danger me-auto" onclick="deleteService('${serviceName}')">
-                            <i class="fas fa-trash"></i> Delete Service
+                </div>
+            </div>
+            <!-- ...existing code... -->
+    </div>
+</div>
+
+<!-- Service Action Modals -->
+<div class="modal fade" id="serviceActionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="serviceActionModalTitle">Service Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="serviceActionModalBody">
+                <!-- Action content -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmServiceAction">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Consolidated Docker Stack Management Modal -->
+<div class="modal fade" id="stackManagementModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-layer-group"></i> Docker Stack Editor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Navigation Tabs -->
+                <ul class="nav nav-tabs mb-3" id="modalStackTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="modal-compose-tab" data-bs-toggle="tab" data-bs-target="#modal-compose-content" type="button" role="tab">
+                            <i class="fas fa-file-code"></i> YAML Editor
                         </button>
-                        <button type="button" class="btn btn-primary" onclick="saveServiceChanges('${serviceName}')">
-                            <i class="fas fa-save"></i> Save Changes
-                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="modalStackTabContent">
+                    <!-- Compose YAML Tab -->
+                    <div class="tab-pane fade show active" id="modal-compose-content" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Docker Compose YAML</h6>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="stackReloadCompose()">
+                                    <i class="fas fa-sync"></i> Reload
+                                </button>
+                                <button class="btn btn-outline-warning" onclick="stackValidateCompose()">
+                                    <i class="fas fa-check"></i> Validate
+                                </button>
+                                <button class="btn btn-outline-success" onclick="stackSaveCompose()">
+                                    <i class="fas fa-save"></i> Save
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="stackComposeEditor">
+                            <textarea id="stackComposeTextarea" class="form-control" rows="20" style="font-family: 'Courier New', monospace;">{{ compose_yaml or '# Docker Compose configuration will be loaded here...' }}</textarea>
+                        </div>
+                        
+                        <div id="stackComposeValidation" class="mt-2" style="display: none;"></div>
                     </div>
                 </div>
             </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="stackApplyChanges()">
+                    <i class="fas fa-check"></i> Apply Changes
+                </button>
+            </div>
         </div>
-    `;
-    
-    // Remove existing modal if present
-    const existingModal = document.getElementById('serviceEditModal');
-    if (existingModal) {
-        console.log('Removing existing modal');
-        existingModal.remove();
-    }
-    
-    // Add new modal to body
-    console.log('Adding modal to DOM');
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
-    // Show the modal
-    console.log('Initializing Bootstrap modal');
-    const modal = new bootstrap.Modal(document.getElementById('serviceEditModal'));
-    modal.show();
-    console.log('Modal shown');
-    
-    // Load the service configuration
-    loadServiceConfiguration(serviceName);
-    } catch (error) {
-        console.error('Error creating service edit modal:', error);
-        showError('Failed to open service editor: ' + error.message);
-    }
-}
+    </div>
+</div>
 
-function loadServiceConfiguration(serviceName) {
-    console.log('Loading service configuration for:', serviceName);
-    
-    // Load service configuration from the backend
-    fetch(`/api/docker-compose/service/${serviceName}`)
-        .then(response => {
-            console.log('Service config API response status:', response.status);
-            return response.json();
-        })
-        .then(data => {
-            console.log('Service config API response data:', data);
-            if (data.success) {
-                populateServiceEditForm(data.service);
-                const yamlTextarea = document.getElementById('serviceYamlTextarea');
-                if (yamlTextarea) {
-                    yamlTextarea.value = data.yaml;
-                    console.log('YAML populated successfully');
-                } else {
-                    console.log('YAML textarea not found');
-                }
-            } else {
-                console.error('API returned error:', data.error);
-                showError('Failed to load service configuration: ' + data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error loading service configuration:', error);
-            showError('Error loading service configuration: ' + error.message);
-        });
-}
+<!-- Network Creation Modal -->
+<div class="modal fade" id="addNetworkModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-network-wired"></i> Create Network</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createNetworkForm">
+                    <div class="mb-3">
+                        <label for="networkName" class="form-label">Network Name</label>
+                        <input type="text" class="form-control" id="networkName" required placeholder="e.g., freqtrade_network">
+                    </div>
+                    <div class="mb-3">
+                        <label for="networkDriver" class="form-label">Driver</label>
+                        <select class="form-select" id="networkDriver">
+                            <option value="bridge" selected>Bridge</option>
+                            <option value="overlay">Overlay</option>
+                            <option value="host">Host</option>
+                            <option value="none">None</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="createNetworkFromModal()">Create Network</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-function populateServiceEditForm(serviceConfig) {
-    console.log('Populating service edit form with config:', serviceConfig);
-    
-    // Populate the visual editor form with service configuration
-    const imageElement = document.getElementById('editServiceImage');
-    const containerElement = document.getElementById('editServiceContainer');
-    const restartElement = document.getElementById('editServiceRestart');
-    
-    console.log('Form elements found:', {
-        image: !!imageElement,
-        container: !!containerElement,
-        restart: !!restartElement
-    });
-    
-    if (imageElement) imageElement.value = serviceConfig.image || '';
-    if (containerElement) containerElement.value = serviceConfig.container_name || '';
-    if (restartElement) restartElement.value = serviceConfig.restart || 'unless-stopped';
-    
-    // Handle ports array
-    if (serviceConfig.ports && Array.isArray(serviceConfig.ports)) {
-        const portsElement = document.getElementById('editServicePorts');
-        if (portsElement) portsElement.value = serviceConfig.ports.join('\n');
-    }
-    
-    // Handle volumes array
-    if (serviceConfig.volumes && Array.isArray(serviceConfig.volumes)) {
-        const volumesElement = document.getElementById('editServiceVolumes');
-        if (volumesElement) volumesElement.value = serviceConfig.volumes.join('\n');
-    }
-    
-    // Handle command
-    if (serviceConfig.command) {
-        const commandElement = document.getElementById('editServiceCommand');
-        if (commandElement) {
-            if (Array.isArray(serviceConfig.command)) {
-                commandElement.value = serviceConfig.command.join(' ');
-            } else {
-                commandElement.value = serviceConfig.command;
-            }
-        }
-    }
-    
-    // Handle environment variables
-    if (serviceConfig.environment && Array.isArray(serviceConfig.environment)) {
-        const envElement = document.getElementById('editServiceEnvironment');
-        if (envElement) envElement.value = serviceConfig.environment.join('\n');
-    }
-    
-    // Handle networks
-    if (serviceConfig.networks && Array.isArray(serviceConfig.networks)) {
-        document.getElementById('editServiceNetworks').value = serviceConfig.networks.join(', ');
-    }
-}
+<!-- Networks Management Modal -->
+<div class="modal fade" id="networksModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-network-wired"></i> Docker Networks Management</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0">Available Networks</h6>
+                    <button type="button" class="btn btn-success btn-sm" onclick="showAddNetworkModal()">
+                        <i class="fas fa-plus"></i> Add Network
+                    </button>
+                </div>
+                <div id="modalNetworksList">
+                    <!-- Networks will be loaded here -->
+                </div>
+                <div id="modalLoadingNetworks" class="text-center">
+                    <div class="spinner-border text-primary spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading networks...</span>
+                    </div>
+                </div>
+                <div id="modalNoNetworks" class="text-center text-muted" style="display: none;">
+                    <i class="fas fa-info-circle fa-2x mb-2"></i>
+                    <p>No networks defined in Docker Compose file</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="loadNetworks()">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-function reloadServiceYaml(serviceName) {
-    loadServiceConfiguration(serviceName);
-    showInfo('Service configuration reloaded');
-}
-
-function validateServiceYaml() {
-    const yaml = document.getElementById('serviceYamlTextarea').value;
-    
-    fetch('/api/docker-compose/validate', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ yaml: yaml })
-    })
-    .then(response => response.json())
-    .then(data => {
-        const validationDiv = document.getElementById('serviceYamlValidation');
-        if (data.valid) {
-            validationDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> YAML is valid</div>';
-            validationDiv.style.display = 'block';
+<script>
+function toggleServiceCard(idx) {
+    const body = document.getElementById(`service-card-body-${idx}`);
+    const icon = document.getElementById(`service-card-toggle-icon-${idx}`);
+    if (body && icon) {
+        if (body.classList.contains('show')) {
+            body.classList.remove('show');
+            icon.classList.remove('fa-chevron-up');
+            icon.classList.add('fa-chevron-down');
         } else {
-            validationDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> YAML validation failed: ${data.error}</div>`;
-            validationDiv.style.display = 'block';
+            body.classList.add('show');
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-up');
         }
-    })
-    .catch(error => {
-        const validationDiv = document.getElementById('serviceYamlValidation');
-        validationDiv.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> Validation error: ${error.message}</div>`;
-        validationDiv.style.display = 'block';
-    });
-}
-
-// Function to rationalize YAML content and show issues
-async function rationalizeYamlContent(yamlContent, showNotifications = true) {
-    try {
-        const response = await fetch('/api/docker-compose/rationalize', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ yaml_content: yamlContent })
-        });
-        
-        const data = await response.json();
-        
-        if (!data.success) {
-            if (showNotifications) {
-                showNotification(`YAML Error: ${data.error}`, 'error');
-            }
-            return { success: false, yaml: yamlContent, issues: [data.error] };
-        }
-        
-        const hasIssues = data.has_issues || data.has_fixes;
-        let issues = [];
-        
-        if (data.issues_found && data.issues_found.length > 0) {
-            issues.push(...data.issues_found.map(issue => `Error: ${issue}`));
-        }
-        
-        if (data.issues_fixed && data.issues_fixed.length > 0) {
-            issues.push(...data.issues_fixed.map(fix => `Fixed: ${fix}`));
-        }
-        
-        if (showNotifications && hasIssues) {
-            if (data.has_issues && data.issues_found.length > 0) {
-                showNotification(`YAML Issues Found: ${data.issues_found.join('; ')}`, 'warning');
-            }
-            if (data.has_fixes && data.issues_fixed.length > 0) {
-                showNotification(`YAML Auto-Fixed: ${data.issues_fixed.join('; ')}`, 'info');
-            }
-        }
-        
-        return {
-            success: true,
-            yaml: data.rationalized_yaml,
-            original_yaml: yamlContent,
-            issues: issues,
-            has_issues: data.has_issues,
-            has_fixes: data.has_fixes,
-            issues_found: data.issues_found || [],
-            issues_fixed: data.issues_fixed || []
-        };
-        
-    } catch (error) {
-        console.error('Error rationalizing YAML:', error);
-        if (showNotifications) {
-            showNotification(`Network error during YAML rationalization: ${error.message}`, 'error');
-        }
-        return { success: false, yaml: yamlContent, issues: [error.message] };
     }
-}
-
-// Function to add config issue indicator to header
-function updateConfigIssuesHeader(hasIssues) {
-    const headerElement = document.querySelector('.navbar-brand');
-    if (!headerElement) return;
-    
-    // Remove existing issue indicator
-    const existingIndicator = headerElement.querySelector('.config-issue-indicator');
-    if (existingIndicator) {
-        existingIndicator.remove();
-    }
-    
-    if (hasIssues) {
-        const indicator = document.createElement('span');
-        indicator.className = 'config-issue-indicator badge bg-warning ms-2';
-        indicator.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Config Issues';
-        indicator.title = 'Configuration issues detected';
-        headerElement.appendChild(indicator);
-    }
-}
-
-function saveServiceChanges(serviceName) {
-    const activeTab = document.querySelector('#serviceEditTabs .nav-link.active').getAttribute('data-bs-target');
-    
-    if (activeTab === '#service-yaml-content') {
-        // Save from YAML editor with rationalization
-        const yamlContent = document.getElementById('serviceYamlTextarea').value;
-        
-        // First rationalize the YAML
-        rationalizeYamlContent(yamlContent, true).then(rationalized => {
-            let serviceData = {
-                yaml: rationalized.success ? rationalized.yaml : yamlContent
-            };
-            
-            // Update the textarea with rationalized content if it was fixed
-            if (rationalized.success && rationalized.has_fixes) {
-                document.getElementById('serviceYamlTextarea').value = rationalized.yaml;
-            }
-            
-            // Update header if there are issues
-            updateConfigIssuesHeader(rationalized.has_issues);
-            
-            // Proceed with save
-            saveServiceData(serviceName, serviceData);
-        });
-    } else {
-        // Save from visual editor
-        const serviceData = {
-            image: document.getElementById('editServiceImage').value,
-            container_name: document.getElementById('editServiceContainer').value,
-            restart: document.getElementById('editServiceRestart').value,
-            ports: document.getElementById('editServicePorts').value.split('\n').filter(p => p.trim()),
-            volumes: document.getElementById('editServiceVolumes').value.split('\n').filter(v => v.trim()),
-            command: document.getElementById('editServiceCommand').value,
-            environment: document.getElementById('editServiceEnvironment').value.split('\n').filter(e => e.trim()),
-            networks: document.getElementById('editServiceNetworks').value.split(',').map(n => n.trim()).filter(n => n)
-        };
-        
-        saveServiceData(serviceName, serviceData);
-    }
-}
-
-function saveServiceData(serviceName, serviceData) {
-    fetch(`/api/docker-compose/service/${serviceName}`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(serviceData)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showSuccess('Service updated successfully');
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('serviceEditModal'));
-            modal.hide();
-            // Refresh services display and port consistency checks
-            console.log('Service saved successfully, refreshing services and port checks');
-            loadServices();
-            // Give more time for services to load, then refresh port checks
-            setTimeout(() => {
-                console.log('Refreshing port consistency checks after service save');
-                refreshPortConsistencyChecks();
-            }, 1000);
-        } else {
-            showError('Failed to update service: ' + data.error);
-        }
-    })
-    .catch(error => {
-        showError('Error updating service: ' + error.message);
-    });
-}
-
-function stackEditService(serviceName) {
-    showServiceEditModal(serviceName);
-}
-
-function stackDeleteService(serviceName) {
-    deleteService(serviceName);
-}
-
-function stackApplyChanges() {
-    showInfo('Applying changes...');
-    // Implementation for applying all changes
 }
 </script>
+
 {% endblock %}

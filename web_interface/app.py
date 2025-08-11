@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
-"""
-FreqTrade Web Management Interface
-A Flask-based web application for managing FreqTrade strategies, pairlists, and Docker containers.
-"""
-
+# --- Imports ---
+import threading
 import os
 import json
 import subprocess
@@ -13,7 +9,7 @@ import warnings
 import shutil
 import traceback
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
 import docker
 from werkzeug.utils import secure_filename
 
@@ -21,15 +17,166 @@ from werkzeug.utils import secure_filename
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="cryptography")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="paramiko")
 
-app = Flask(__name__)
-app.secret_key = 'freqtrade_web_interface_2025'
-
-# Configuration
+# --- Configuration ---
 BASE_PATH = Path(__file__).parent.parent
 USER_DATA_PATH = BASE_PATH / "user_data"
 PAIRLISTS_PATH = USER_DATA_PATH / "pairlists"
 STRATEGIES_PATH = USER_DATA_PATH / "strategies"
 CONFIGS_PATH = USER_DATA_PATH
+SETTINGS_PATH = USER_DATA_PATH / "settings.json"
+
+# --- Flask App Initialization ---
+app = Flask(__name__)
+app.secret_key = 'freqtrade_web_interface_2025'
+
+# --- Settings Management ---
+def load_settings():
+    default_settings = {
+        "cloudflare_tunnel_enabled": False,
+        "cloudflare_tunnel_url": None,
+        "cloudflare_tunnel_autostart": False
+    }
+    if SETTINGS_PATH.exists():
+        with open(SETTINGS_PATH, 'r') as f:
+            loaded = json.load(f)
+            # Ensure all default keys are present
+            for k, v in default_settings.items():
+                if k not in loaded:
+                    loaded[k] = v
+            return loaded
+    return default_settings
+
+def save_settings(settings):
+    with open(SETTINGS_PATH, 'w') as f:
+        json.dump(settings, f, indent=2)
+
+# --- Cloudflare Tunnel Management ---
+_tunnel_process = None
+_tunnel_lock = threading.Lock()
+
+def start_cloudflare_tunnel():
+    global _tunnel_process
+    with _tunnel_lock:
+        if _tunnel_process and _tunnel_process.poll() is None:
+            return True  # Already running
+        # You may need to adjust the path to 'cloudflared' and the arguments
+        try:
+            _tunnel_process = subprocess.Popen([
+                "cloudflared", "tunnel", "--url", "http://localhost:5000"
+            ])
+            return True
+        except Exception as e:
+            print(f"Error starting Cloudflare Tunnel: {e}")
+            return False
+
+def stop_cloudflare_tunnel():
+    global _tunnel_process
+    with _tunnel_lock:
+        if _tunnel_process and _tunnel_process.poll() is None:
+            _tunnel_process.terminate()
+            _tunnel_process = None
+            return True
+        return False
+
+def is_tunnel_running():
+    global _tunnel_process
+    with _tunnel_lock:
+        return _tunnel_process is not None and _tunnel_process.poll() is None
+
+# --- Global Options Menu (Cloudflare Tunnel) ---
+@app.route('/options', methods=['GET', 'POST'])
+def options():
+    settings = load_settings()
+    CLOUDFLARE_TUNNEL_LOG = USER_DATA_PATH / "cloudflared.log"
+
+    def get_tunnel_url_from_log():
+        if CLOUDFLARE_TUNNEL_LOG.exists():
+            with open(CLOUDFLARE_TUNNEL_LOG, 'r') as f:
+                for line in f:
+                    if "trycloudflare.com" in line:
+                        for word in line.split():
+                            if word.startswith("http") and "trycloudflare.com" in word:
+                                return word.strip()
+        return None
+
+    def get_available_configs(self):
+        """Get all available config files from both configs and user_data directories"""
+        configs = []
+        processed_files = set()  # Track processed files to avoid duplicates
+
+        # Check configs directory first
+        for file in self.configs_path.glob("*.json"):
+            if file.is_file() and file.name.startswith('config') and file.name not in processed_files:
+                processed_files.add(file.name)
+                data = {}
+                try:
+                    with open(file, 'r') as f:
+                        data = json.load(f)
+                except Exception as e:
+                    print(f"Error reading config {file}: {e}")
+                    data = {}
+                configs.append({
+                    'name': file.name,
+                    'filename': file.name,
+                    'path': str(file),
+                    'strategy': data.get('strategy', 'Unknown'),
+                    'trading_mode': data.get('trading_mode', 'spot'),
+                    'timeframe': data.get('timeframe', '5m'),
+                    'dry_run': data.get('dry_run', True),
+                    'freqai_enabled': data.get('freqai', {}).get('enabled', False),
+                    'modified': datetime.datetime.fromtimestamp(file.stat().st_mtime).strftime('%Y-%m-%d %H:%M'),
+                    'location': 'configs',
+                    'category': data.get('category')
+                })
+
+        # Check user_data directory for additional config files
+        for file in self.user_data_path.glob("config*.json"):
+            if file.is_file() and file.name not in processed_files:
+                processed_files.add(file.name)
+                data = {}
+                try:
+                    with open(file, 'r') as f:
+                        data = json.load(f)
+                except Exception as e:
+                    print(f"Error reading config {file}: {e}")
+                    data = {}
+                configs.append({
+                    'name': file.name,
+                    'filename': file.name,
+                    'path': str(file),
+                    'strategy': data.get('strategy', 'Unknown'),
+                    'trading_mode': data.get('trading_mode', 'spot'),
+                    'timeframe': data.get('timeframe', '5m'),
+                    'dry_run': data.get('dry_run', True),
+                    'freqai_enabled': data.get('freqai', {}).get('enabled', False),
+                    'modified': datetime.datetime.fromtimestamp(file.stat().st_mtime).strftime('%Y-%m-%d %H:%M'),
+                    'location': 'user_data',
+                    'category': data.get('category')
+                })
+        return sorted(configs, key=lambda x: x['name'])
+        # Report container status
+        settings['tunnel_running'] = (container and container.status == 'running')
+        settings['cloudflare_tunnel_exists'] = exists
+        save_settings(settings)
+        return jsonify({"success": True, "message": msg, "settings": settings})
+
+    # For GET, return settings as JSON for modal/AJAX
+    container = get_cloudflared_container()
+    exists = cloudflared_container_exists()
+    settings['tunnel_running'] = (container and container.status == 'running')
+    settings['cloudflare_tunnel_exists'] = exists
+    url = get_tunnel_url_from_log()
+    if url:
+        settings['cloudflare_tunnel_url'] = url
+    return jsonify(settings)
+
+# Debug print after app is defined
+print("\n>>> THIS IS THE app.py BEING RUN <<<\n")
+with app.app_context():
+    print("Registered routes:")
+    for rule in app.url_map.iter_rules():
+        print(rule)
+
 
 # Docker client initialization
 docker_client = None
@@ -112,8 +259,11 @@ def init_docker_client():
     print("   3. Restart this application")
     return False
 
+
 # Try to initialize Docker client
 docker_connected = init_docker_client()
+
+## Removed automatic cloudflared container startup. Now only handled when user enables in options.
 
 def check_docker_status():
     """Check if Docker is available and return status info"""
@@ -164,39 +314,50 @@ class FreqTradeManager:
         self.strategies_path = STRATEGIES_PATH
         self.configs_path = CONFIGS_PATH
         self.docker_compose_path = BASE_PATH / "docker-compose.yml"
-        
+
+    def get_pairlist_categories(self):
+        """Load pairlist categories from user_config.json (single source of truth)"""
+        config_path = self.base_path / "web_interface" / "config" / "user_config.json"
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            return config.get('pairlist_categories', [])
+        except Exception as e:
+            print(f"Error loading pairlist categories: {e}")
+            return []
+
+    def get_category_color(self, category_name):
+        cats = self.get_pairlist_categories()
+        for cat in cats:
+            if cat['name'].lower() == (category_name or '').lower():
+                return cat.get('color', '#6c757d')
+        return '#6c757d'
+
     def get_available_pairlists(self):
-        """Get all available pairlist files"""
+        """Get all available pairlist files, using user_config.json for category/color"""
         pairlists = []
+        categories = self.get_pairlist_categories()
         if self.pairlists_path.exists():
             for file in self.pairlists_path.glob("*.json"):
                 try:
                     with open(file, 'r') as f:
                         data = json.load(f)
+                    category = data.get('category', 'custom')
+                    color = self.get_category_color(category)
                     pairlists.append({
                         'name': file.name,
                         'filename': file.name,
                         'path': str(file),
                         'pairs_count': len(data.get('pair_whitelist', [])),
-                        'category': self._categorize_pairlist(file.name)
+                        'category': category,
+                        'color': color
                     })
                 except Exception as e:
                     print(f"Error reading pairlist {file}: {e}")
         return sorted(pairlists, key=lambda x: x['name'])
-    
+
     def _categorize_pairlist(self, filename):
-        """Categorize pairlist based on filename"""
-        filename_lower = filename.lower()
-        if 'test' in filename_lower:
-            return 'test'
-        elif 'freqai' in filename_lower:
-            return 'freqai'
-        elif 'full' in filename_lower or 'all' in filename_lower:
-            return 'full'
-        elif 'top' in filename_lower or 'volume' in filename_lower:
-            return 'popular'
-        else:
-            return 'custom'
+        return None
     
     def get_available_strategies(self):
         """Get all available strategy files"""
@@ -226,10 +387,10 @@ class FreqTradeManager:
             return 'custom'
     
     def get_available_configs(self):
-        """Get all available config files from both configs and user_data directories"""
+        """Get all available config files from both configs and user_data directories, using user_config.json for category/color"""
         configs = []
-        processed_files = set()  # Track processed files to avoid duplicates
-        
+        processed_files = set()
+        categories = self.get_pairlist_categories()
         # Check configs directory first
         for file in self.configs_path.glob("*.json"):
             if file.is_file() and file.name.startswith('config') and file.name not in processed_files:
@@ -237,6 +398,8 @@ class FreqTradeManager:
                 try:
                     with open(file, 'r') as f:
                         data = json.load(f)
+                    category = data.get('category', 'custom')
+                    color = self.get_category_color(category)
                     configs.append({
                         'name': file.name,
                         'filename': file.name,
@@ -247,11 +410,12 @@ class FreqTradeManager:
                         'dry_run': data.get('dry_run', True),
                         'freqai_enabled': data.get('freqai', {}).get('enabled', False),
                         'modified': datetime.datetime.fromtimestamp(file.stat().st_mtime).strftime('%Y-%m-%d %H:%M'),
-                        'location': 'configs'
+                        'location': 'configs',
+                        'category': category,
+                        'color': color
                     })
                 except Exception as e:
                     print(f"Error reading config {file}: {e}")
-        
         # Check user_data directory for additional config files
         for file in self.user_data_path.glob("config*.json"):
             if file.is_file() and file.name not in processed_files:
@@ -259,6 +423,8 @@ class FreqTradeManager:
                 try:
                     with open(file, 'r') as f:
                         data = json.load(f)
+                    category = data.get('category', 'custom')
+                    color = self.get_category_color(category)
                     configs.append({
                         'name': file.name,
                         'filename': file.name,
@@ -269,21 +435,23 @@ class FreqTradeManager:
                         'dry_run': data.get('dry_run', True),
                         'freqai_enabled': data.get('freqai', {}).get('enabled', False),
                         'modified': datetime.datetime.fromtimestamp(file.stat().st_mtime).strftime('%Y-%m-%d %H:%M'),
-                        'location': 'user_data'
+                        'location': 'user_data',
+                        'category': category,
+                        'color': color
                     })
                 except Exception as e:
                     print(f"Error reading config {file}: {e}")
-        
         return sorted(configs, key=lambda x: x['name'])
     
     def get_docker_containers(self):
-        """Get FreqTrade Docker containers"""
+        """Get FreqTrade and Cloudflare Tunnel Docker containers"""
         containers = []
         if docker_client:
             try:
                 all_containers = docker_client.containers.list(all=True)
                 for container in all_containers:
-                    if 'freqtrade' in container.name.lower():
+                    name_lower = container.name.lower()
+                    if 'freqtrade' in name_lower or 'cloudflared' in name_lower:
                         containers.append({
                             'name': container.name,
                             'id': container.short_id,
@@ -313,25 +481,35 @@ class FreqTradeManager:
     def resolve_docker_path_to_local(self, docker_path, service_config):
         """Resolve Docker container path to local filesystem path using volume mappings"""
         try:
+            print(f"DEBUG resolve_docker_path_to_local: docker_path={docker_path}")
+            print(f"DEBUG resolve_docker_path_to_local: service_config has volumes: {'volumes' in service_config}")
+            
             if not docker_path or 'volumes' not in service_config:
+                print(f"DEBUG resolve_docker_path_to_local: Early return - docker_path={bool(docker_path)}, has_volumes={'volumes' in service_config}")
                 return None
             
             volumes = service_config['volumes']
+            print(f"DEBUG resolve_docker_path_to_local: volumes={volumes}")
             if not isinstance(volumes, list):
                 return None
             
             for volume in volumes:
+                print(f"DEBUG resolve_docker_path_to_local: checking volume={volume}")
                 if isinstance(volume, str) and ':' in volume:
                     # Handle volume format: "local_path:container_path" or "local_path:container_path:options"
                     parts = volume.split(':')
+                    print(f"DEBUG resolve_docker_path_to_local: volume parts={parts}")
                     if len(parts) >= 2:
                         local_path = parts[0]
                         container_path = parts[1]
+                        print(f"DEBUG resolve_docker_path_to_local: local_path={local_path}, container_path={container_path}")
                         
                         # Check if docker_path starts with the container path
                         if docker_path.startswith(container_path):
+                            print(f"DEBUG resolve_docker_path_to_local: MATCH found for {docker_path} with {container_path}")
                             # Replace container path with local path
                             relative_path = docker_path[len(container_path):].lstrip('/')
+                            print(f"DEBUG resolve_docker_path_to_local: relative_path={relative_path}")
                             
                             # Convert to absolute local path
                             if local_path.startswith('./'):
@@ -344,11 +522,14 @@ class FreqTradeManager:
                                 # Relative to base path
                                 local_base = self.base_path / local_path
                             
+                            print(f"DEBUG resolve_docker_path_to_local: local_base={local_base}")
+                            
                             if relative_path:
                                 resolved_path = local_base / relative_path
                             else:
                                 resolved_path = local_base
                             
+                            print(f"DEBUG resolve_docker_path_to_local: resolved_path={resolved_path}, exists={resolved_path.exists()}")
                             return resolved_path
             
             return None
@@ -683,13 +864,6 @@ class FreqTradeManager:
             traceback.print_exc()
             raise Exception(f"Error creating custom config: {e}")
 
-    def get_docker_services(self):
-        """Get all services from docker-compose.yml"""
-        compose_data = self.load_docker_compose()
-        if compose_data and 'services' in compose_data:
-            return list(compose_data['services'].keys())
-        return []
-    
     def load_docker_compose(self):
         """Load docker-compose.yml file"""
         try:
@@ -701,39 +875,6 @@ class FreqTradeManager:
             print(f"Error loading docker-compose.yml: {e}")
             return None
     
-    def save_docker_compose(self, compose_data):
-        """Save docker-compose.yml file with proper formatting"""
-        try:
-            print(f"Saving docker-compose.yml with {len(compose_data.get('services', {}))} services")
-            
-            # Backup the original file
-            if self.docker_compose_path.exists():
-                backup_path = self.docker_compose_path.with_suffix('.yml.backup')
-                import shutil
-                shutil.copy2(self.docker_compose_path, backup_path)
-                print(f"Backup created: {backup_path}")
-            
-            # Ensure proper structure
-            if 'version' not in compose_data:
-                compose_data['version'] = '3.8'
-            
-            # Write with proper YAML formatting
-            with open(self.docker_compose_path, 'w', encoding='utf-8') as f:
-                yaml.dump(compose_data, f, 
-                         default_flow_style=False, 
-                         indent=2,
-                         sort_keys=False,
-                         allow_unicode=True,
-                         width=120)
-            
-            print(f"Successfully saved docker-compose.yml")
-            return True
-            
-        except Exception as e:
-            print(f"Error saving docker-compose.yml: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
     
     def get_docker_services(self):
         """Get all services from docker-compose.yml"""
@@ -798,7 +939,7 @@ class FreqTradeManager:
                             parts = command_str.split('--config ')
                             if len(parts) > 1:
                                 config_part = parts[1].split()[0]  # Get first word after --config
-                                config_file = config_part.replace('/freqtrade/user_data/', '')
+                                config_file = config_part  # Keep full Docker path for consistency
                 
                 service_info['strategy'] = strategy
                 service_info['config_file'] = config_file
@@ -823,7 +964,7 @@ class FreqTradeManager:
                 ports = service_config['ports']
                 
                 if isinstance(ports, list) and len(ports) > 0:
-                    port_mapping = ports[0]  # Take first port mapping
+                    port_mapping = ports[0] # Take first port mapping
                     
                     if ':' in str(port_mapping):
                         parts = str(port_mapping).split(':')
@@ -1238,6 +1379,8 @@ class FreqTradeManager:
                     'message': 'No config file specified'
                 }
             
+            print(f"DEBUG {service_name}: validate_config_file called with config_file: {config_file}")
+            
             # Check for config consistency between command and environment
             consistency_check = self.check_config_consistency(service_name, service_config)
             inconsistency_message = None
@@ -1245,17 +1388,19 @@ class FreqTradeManager:
             if consistency_check['has_mismatch']:
                 inconsistency_message = consistency_check['details']['message']
             
-            # Extract just filename if it's a full path
-            if '/' in config_file:
-                config_filename = config_file.split('/')[-1]
-            else:
-                config_filename = config_file
-            
-            # Find config file using Docker volume mappings
-            config_path = self.find_config_file_in_service(config_filename, service_config)
+            # Find config file using Docker volume mappings with full Docker path
+            config_path = self.find_config_file_in_service(config_file, service_config)
+            print(f"DEBUG {service_name}: find_config_file_in_service returned: {config_path}")
             
             if not config_path:
-                error_msg = f'Config file "{config_filename}" not found'
+                # Also try with just the filename as fallback
+                if '/' in config_file:
+                    config_filename = config_file.split('/')[-1]
+                    config_path = self.find_config_file_in_service(config_filename, service_config)
+                    print(f"DEBUG {service_name}: Fallback with filename {config_filename}: {config_path}")
+            
+            if not config_path:
+                error_msg = f'Config file "{config_file}" not found'
                 if inconsistency_message:
                     error_msg = f'{inconsistency_message}. {error_msg}'
                 
@@ -1263,7 +1408,7 @@ class FreqTradeManager:
                     'success': True,
                     'valid': False,
                     'config_found': False,
-                    'config_path': config_filename,
+                    'config_path': config_file,
                     'json_valid': False,
                     'structure_valid': False,
                     'api_configured': False,
@@ -1502,54 +1647,6 @@ class FreqTradeManager:
             traceback.print_exc()
             return False
     
-    def remove_docker_service(self, service_name):
-        """Remove a service from docker-compose.yml"""
-        try:
-            compose_data = self.load_docker_compose()
-            if compose_data and 'services' in compose_data:
-                if service_name in compose_data['services']:
-                    del compose_data['services'][service_name]
-                    return self.save_docker_compose(compose_data)
-            return False
-        except Exception as e:
-            print(f"Error removing Docker service: {e}")
-            return False
-    
-    def add_general_docker_service(self, service_name, service_config):
-        """Add a general Docker service to docker-compose.yml"""
-        try:
-            print(f"Adding general Docker service: {service_name}")
-            compose_data = self.load_docker_compose()
-            if not compose_data:
-                # Create basic structure if file doesn't exist
-                compose_data = {
-                    'version': '3.8',
-                    'services': {},
-                    'networks': {
-                        'freqtrade_network': {
-                            'driver': 'bridge'
-                        }
-                    }
-                }
-            
-            # Ensure services key exists
-            if 'services' not in compose_data:
-                compose_data['services'] = {}
-                
-            # Check if service already exists
-            if service_name in compose_data['services']:
-                print(f"Service {service_name} already exists")
-                return False
-            
-            # Add the service configuration
-            compose_data['services'][service_name] = service_config
-            
-            # Save the updated compose file
-            return self.save_docker_compose(compose_data)
-            
-        except Exception as e:
-            print(f"Error adding general Docker service {service_name}: {e}")
-            return False
     
     def start_docker_service(self, service_name):
         """Start a specific Docker service using docker compose up -d"""
@@ -2145,48 +2242,6 @@ class FreqTradeManager:
             print(f"Error fixing Docker Compose formatting: {e}")
             return False
 
-    def get_docker_networks(self):
-        """Get all networks from docker-compose.yml"""
-        try:
-            compose_data = self.load_docker_compose()
-            if compose_data and 'networks' in compose_data:
-                return compose_data['networks']
-            return {}
-        except Exception as e:
-            print(f"Error getting Docker networks: {e}")
-            return {}
-    
-    def add_docker_network(self, network_name, driver='bridge'):
-        """Add a network to docker-compose.yml"""
-        try:
-            compose_data = self.load_docker_compose()
-            if not compose_data:
-                compose_data = {'services': {}, 'networks': {}}
-            
-            if 'networks' not in compose_data:
-                compose_data['networks'] = {}
-            
-            compose_data['networks'][network_name] = {
-                'driver': driver
-            }
-            
-            return self.save_docker_compose(compose_data)
-        except Exception as e:
-            print(f"Error adding Docker network: {e}")
-            return False
-    
-    def remove_docker_network(self, network_name):
-        """Remove a network from docker-compose.yml"""
-        try:
-            compose_data = self.load_docker_compose()
-            if compose_data and 'networks' in compose_data:
-                if network_name in compose_data['networks']:
-                    del compose_data['networks'][network_name]
-                    return self.save_docker_compose(compose_data)
-            return False
-        except Exception as e:
-            print(f"Error removing Docker network: {e}")
-            return False
 
 manager = FreqTradeManager()
 
@@ -2256,8 +2311,8 @@ def container_action(action, container_name):
         else:
             return jsonify({'error': 'Invalid action'}), 400
             
-    except docker.errors.NotFound:
-        return jsonify({'error': f'Container {container_name} not found'}), 404
+    # except docker.errors.NotFound:
+    #     return jsonify({'error': f'Container {container_name} not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -2271,8 +2326,8 @@ def container_logs(container_name):
         container = docker_client.containers.get(container_name)
         logs = container.logs(tail=100).decode('utf-8')
         return jsonify({'logs': logs})
-    except docker.errors.NotFound:
-        return jsonify({'error': f'Container {container_name} not found'}), 404
+    # except docker.errors.NotFound:
+    #     return jsonify({'error': f'Container {container_name} not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -2287,11 +2342,100 @@ def get_pairlist(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+# --- API: Update (PUT) and Delete (DELETE) Pairlist ---
+from flask import make_response
+
+# --- API: Get all pairlists as JSON for AJAX refresh ---
+@app.route('/api/pairlists', methods=['GET'])
+def api_get_pairlists():
+    """Return all pairlists as JSON for AJAX refresh"""
+    try:
+        pairlists = manager.get_available_pairlists()
+        return jsonify({"success": True, "pairlists": pairlists})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/pairlist/<filename>', methods=['PUT'])
+def update_pairlist(filename):
+    """Create or update a pairlist file (overwrite or create new)"""
+    try:
+        pairlist_path = manager.pairlists_path / filename
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        # Ensure directory exists
+        pairlist_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(pairlist_path, 'w') as f:
+            json.dump(data, f, indent=4)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/pairlist/<filename>', methods=['DELETE'])
+def delete_pairlist(filename):
+    """Delete a pairlist file"""
+    try:
+        pairlist_path = manager.pairlists_path / filename
+        if not pairlist_path.exists():
+            return jsonify({'error': 'Pairlist not found'}), 404
+        os.remove(pairlist_path)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+
+# --- Config Download Endpoint ---
+@app.route('/api/config/download/<filename>')
+def download_config(filename):
+    """Download a config file as attachment (identical to pairlist logic)"""
+    try:
+        config_path = manager.configs_path / filename
+        if not config_path.exists():
+            return jsonify({'error': 'Config not found'}), 404
+        return send_file(
+            config_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/json'
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pairlist/download/<filename>')
+def download_pairlist(filename):
+    """Download a pairlist file as attachment (same method as strategy download)"""
+    try:
+        pairlist_path = PAIRLISTS_PATH / filename
+        if not pairlist_path.exists():
+            return jsonify({'error': 'Pairlist not found'}), 404
+        return send_file(pairlist_path, as_attachment=True, download_name=filename, mimetype='application/json')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# --- Strategy Download Endpoint ---
+@app.route('/api/strategy/download/<filename>')
+def download_strategy(filename):
+    """Download a strategy file as attachment"""
+    try:
+        strategy_path = STRATEGIES_PATH / filename
+        if not strategy_path.exists():
+            return jsonify({'error': 'Strategy not found'}), 404
+        return send_file(strategy_path, as_attachment=True, download_name=filename, mimetype='text/x-python')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/config/<filename>')
 def get_config(filename):
     """Get config details"""
     try:
-        config_path = manager.configs_path / filename
+        config_path = manager.find_config_file(filename)
+        if not config_path or not config_path.exists():
+            return jsonify({'error': 'Config not found'}), 404
         with open(config_path, 'r') as f:
             data = json.load(f)
         # Remove sensitive data
@@ -2303,15 +2447,135 @@ def get_config(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# --- Configs API ---
+@app.route('/api/configs', methods=['GET'])
+def list_configs():
+    """List all config files"""
+    try:
+        configs = manager.get_available_configs()
+        return jsonify({'success': True, 'configs': configs})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/configs', methods=['POST'])
+def create_config():
+    """Create a new config file"""
+    try:
+        data = request.get_json()
+        name = data.get('name') or data.get('bot_name') or data.get('filename')
+        if not name:
+            return jsonify({'success': False, 'error': 'Missing config name'}), 400
+        if not name.endswith('.json'):
+            name = f"{name}.json"
+        config_path = manager.configs_path / name
+        if config_path.exists():
+            return jsonify({'success': False, 'error': 'Config already exists'}), 409
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        return jsonify({'success': True, 'filename': name})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/config/<filename>', methods=['PUT'])
+def update_or_create_config(filename):
+    """Update an existing config file or create a new one if it does not exist"""
+    try:
+        config_path = manager.configs_path / filename
+        data = request.get_json()
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        return jsonify({'success': True, 'created': not config_path.exists()})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/config/<filename>', methods=['DELETE'])
+def delete_config(filename):
+    """Delete a config file"""
+    try:
+        config_path = manager.configs_path / filename
+        if not config_path.exists():
+            return jsonify({'success': False, 'error': 'Config not found'}), 404
+        os.remove(config_path)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/config/upload', methods=['POST'])
+def upload_config():
+    """Upload a config file"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+        file = request.files['file']
+        if not file.filename or not file.filename.endswith('.json'):
+            return jsonify({'success': False, 'error': 'Only .json files allowed'}), 400
+        config_path = manager.configs_path / file.filename
+        if config_path.exists():
+            return jsonify({'success': False, 'error': 'Config already exists'}), 409
+        file.save(config_path)
+        return jsonify({'success': True, 'filename': file.filename})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# --- User Config Endpoints for Category Settings (grouped with config routes) ---
+@app.route('/config/user_config.json', methods=['GET'])
+def get_user_config():
+    config_path = Path(__file__).parent / 'config' / 'user_config.json'
+    if not config_path.exists():
+        # Return a default config if not found
+        data = {"categories": [], "category_colors": {}}
+    else:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            try:
+                data = json.load(f)
+            except Exception:
+                data = {"categories": [], "category_colors": {}}
+
+    # Compose pairlist_categories for frontend compatibility
+    categories = data.get("categories", [])
+    category_colors = data.get("category_colors", {})
+    pairlist_categories = [
+        {"name": name, "color": category_colors.get(name, "#6c757d")}
+        for name in categories
+    ]
+    # Return both the original fields and the new array for backward compatibility
+    data["pairlist_categories"] = pairlist_categories
+    return jsonify(data)
+
+@app.route('/config/user_config.json', methods=['PUT'])
+def save_user_config():
+    config_path = Path(__file__).parent / 'config' / 'user_config.json'
+    try:
+        data = request.get_json(force=True)
+        # If pairlist_categories is present, convert to categories and category_colors
+        if "pairlist_categories" in data:
+            categories = [cat["name"] for cat in data["pairlist_categories"] if "name" in cat]
+            category_colors = {cat["name"]: cat.get("color", "#6c757d") for cat in data["pairlist_categories"] if "name" in cat}
+            data["categories"] = categories
+            data["category_colors"] = category_colors
+        # Only keep the expected fields
+        filtered = {
+            "categories": data.get("categories", []),
+            "category_colors": data.get("category_colors", {})
+        }
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(filtered, f, indent=2, ensure_ascii=False)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+
 @app.route('/api/docker-compose/update', methods=['POST'])
 def update_docker_compose():
     """Update docker-compose.yml with new service"""
     try:
         data = request.json
-        service_name = data['service_name']
-        strategy = data['strategy']
-        config_file = data['config_file']
-        pairlist_file = data['pairlist_file']
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        service_name = data.get('service_name')
+        strategy = data.get('strategy')
+        config_file = data.get('config_file')
+        pairlist_file = data.get('pairlist_file')
         
         # Use global manager instead of creating new instance
         
@@ -2325,7 +2589,7 @@ def update_docker_compose():
         # Add the service
         success = manager.add_docker_service(
             service_name, strategy, config_file, pairlist_file, 
-            data.get('external_api_port', 8081)
+            (data.get('external_api_port', 8081) if data else 8081)
         )
         
         if success:
@@ -2369,25 +2633,6 @@ def add_docker_service():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/docker-compose/remove/<service_name>', methods=['DELETE'])
-def remove_docker_service(service_name):
-    """Remove a service from docker-compose.yml"""
-    try:
-        # Use global manager instead of creating new instance
-        success = manager.remove_docker_service(service_name)
-        
-        if success:
-            return jsonify({
-                'success': True,
-                'message': f'Successfully removed {service_name} from docker-compose.yml'
-            })
-        else:
-            return jsonify({
-                'error': f'Failed to remove {service_name} from docker-compose.yml'
-            }), 500
-            
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/docker/services', methods=['GET'])
 def get_docker_services():
@@ -2397,6 +2642,21 @@ def get_docker_services():
         return jsonify({
             'success': True,
             'services': services
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/docker/containers', methods=['GET'])
+def get_docker_containers():
+    """Get all Docker containers"""
+    try:
+        containers = manager.get_docker_containers()
+        return jsonify({
+            'success': True,
+            'containers': containers
         })
     except Exception as e:
         return jsonify({
@@ -2419,39 +2679,6 @@ def get_docker_compose_content():
             'error': str(e)
         }), 500
 
-@app.route('/api/docker/compose', methods=['POST'])
-def save_docker_compose():
-    """Save Docker Compose content"""
-    try:
-        data = request.get_json()
-        content = data.get('content', '')
-        
-        # Parse and save the YAML content
-        import yaml
-        try:
-            yaml_data = yaml.safe_load(content)
-            success = manager.save_docker_compose(yaml_data)
-            
-            if success:
-                return jsonify({
-                    'success': True,
-                    'message': 'Docker Compose saved successfully'
-                })
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Failed to save Docker Compose file'
-                }), 500
-        except yaml.YAMLError as e:
-            return jsonify({
-                'success': False,
-                'error': f'YAML syntax error: {str(e)}'
-            }), 400
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 @app.route('/api/docker/validate', methods=['POST'])
 def validate_docker_compose():
@@ -2479,14 +2706,12 @@ def docker_reconnect():
         if init_docker_client():
             return jsonify({
                 'success': True,
-                'message': 'Docker client reconnected successfully',
-                'status': get_docker_status()
+                'message': 'Docker client reconnected successfully'
             })
         else:
             return jsonify({
                 'success': False,
-                'message': 'Failed to reconnect to Docker',
-                'status': get_docker_status()
+                'message': 'Failed to reconnect to Docker'
             }), 503
     except Exception as e:
         return jsonify({
@@ -2515,80 +2740,17 @@ def fix_docker_compose_formatting():
             'error': str(e)
         }), 500
 
-@app.route('/api/docker/networks', methods=['GET'])
-def get_docker_networks():
-    """Get all Docker networks from docker-compose.yml"""
-    try:
-        networks = manager.get_docker_networks()
-        return jsonify({
-            'success': True,
-            'networks': networks
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
-@app.route('/api/docker/networks', methods=['POST'])
-def add_docker_network():
-    """Add a new Docker network to docker-compose.yml"""
-    try:
-        data = request.get_json()
-        name = data.get('name')
-        driver = data.get('driver', 'bridge')
-        
-        if not name:
-            return jsonify({
-                'success': False,
-                'error': 'Network name is required'
-            }), 400
-        
-        success = manager.add_docker_network(name, driver)
-        if success:
-            return jsonify({
-                'success': True,
-                'message': f'Network {name} added successfully'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to add network'
-            }), 500
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
-@app.route('/api/docker/networks/<network_name>', methods=['DELETE'])
-def remove_docker_network(network_name):
-    """Remove a Docker network from docker-compose.yml"""
-    try:
-        success = manager.remove_docker_network(network_name)
-        if success:
-            return jsonify({
-                'success': True,
-                'message': f'Network {network_name} removed successfully'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to remove network'
-            }), 500
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 @app.route('/api/docker/networks/<network_name>', methods=['GET'])
 def get_network_config(network_name):
     """Get configuration for a specific network"""
     try:
-        if manager.docker_client:
+        global docker_client
+        if docker_client:
             try:
-                network = manager.docker_client.networks.get(network_name)
+                network = docker_client.networks.get(network_name)
                 network_config = {
                     'name': network.name,
                     'driver': network.attrs.get('Driver', 'bridge'),
@@ -2836,47 +2998,7 @@ def is_docker_available():
     except Exception:
         return False
 
-def get_docker_status():
-    """Get detailed Docker status information"""
-    if not is_docker_available():
-        return {
-            'available': False,
-            'error': 'Docker client not connected',
-            'containers': [],
-            'images': []
-        }
-    
-    try:
-        containers = []
-        for container in docker_client.containers.list(all=True):
-            containers.append({
-                'id': container.id[:12],
-                'name': container.name,
-                'status': container.status,
-                'image': container.image.tags[0] if container.image.tags else 'unknown'
-            })
-        
-        images = []
-        for image in docker_client.images.list():
-            images.append({
-                'id': image.id[:12],
-                'tags': image.tags,
-                'size': image.attrs.get('Size', 0)
-            })
-        
-        return {
-            'available': True,
-            'error': None,
-            'containers': containers,
-            'images': images
-        }
-    except Exception as e:
-        return {
-            'available': False,
-            'error': str(e),
-            'containers': [],
-            'images': []
-        }
+    # Removed unreachable/invalid code block
 
 @app.route('/api/docker-compose/service/<service_name>', methods=['GET'])
 def get_service_config(service_name):
@@ -3046,7 +3168,7 @@ def validate_port_consistency_api(service_name):
                 parts = command.split('--config')
                 if len(parts) > 1:
                     config_part = parts[1].strip().split()[0]
-                    config_file = config_part.replace('/freqtrade/user_data/', '')
+                    config_file = config_part  # Keep full Docker path for consistency
         
         # Also check environment variables
         if 'environment' in service_config:
@@ -3110,6 +3232,56 @@ def validate_strategy_api(service_name):
         # Check command arguments
         if 'command' in service_config:
             command = service_config['command']
+            command_str = ""
+            
+            if isinstance(command, list):
+                command_str = " ".join(command)
+            elif isinstance(command, str):
+                command_str = command
+            
+            # Debug: temporarily log the raw command for freqtrade_godstra_hyperopt
+            if service_name == 'freqtrade_godstra_hyperopt':
+                print(f"DEBUG {service_name}: Raw command type: {type(command)}")
+                print(f"DEBUG {service_name}: Raw command: {repr(command)}")
+                print(f"DEBUG {service_name}: Command string: {repr(command_str)}")
+            
+            # Handle shell commands with -c flag - normalize whitespace and newlines
+            if '-c' in command_str and 'freqtrade' in command_str:
+                # Normalize whitespace and newlines for parsing
+                normalized_command = ' '.join(command_str.split())
+                
+                if service_name == 'freqtrade_godstra_hyperopt':
+                    print(f"DEBUG {service_name}: Normalized: {repr(normalized_command)}")
+                
+                # Extract content between quotes for shell commands - handle multi-line
+                import re
+                # Try different quote patterns to handle YAML multi-line strings
+                shell_patterns = [
+                    r'-c\s+"(.+)"',               # Double quotes - simple and robust
+                    r"-c\s+'(.+)'",               # Single quotes - simple and robust
+                    r'-c\s+(["\'])(.+?)\1',       # Flexible quotes with backreference
+                ]
+                
+                shell_content = None
+                for pattern in shell_patterns:
+                    shell_match = re.search(pattern, normalized_command, re.DOTALL | re.MULTILINE)
+                    if shell_match:
+                        # Get the captured group (might be group 1 or 2 depending on pattern)
+                        shell_content = shell_match.group(2) if shell_match.lastindex and shell_match.lastindex >= 2 else shell_match.group(1)
+                        if service_name == 'freqtrade_godstra_hyperopt':
+                            print(f"DEBUG {service_name}: Pattern matched: {pattern}")
+                            print(f"DEBUG {service_name}: Shell content: {repr(shell_content)}")
+                        break
+                
+                if shell_content:
+                    # Look for --strategy in the shell content
+                    strategy_match = re.search(r'--strategy\s+(\S+)', shell_content)
+                    if strategy_match:
+                        strategy = strategy_match.group(1)
+                        if service_name == 'freqtrade_godstra_hyperopt':
+                            print(f"DEBUG {service_name}: Found strategy: {strategy}")
+                        
+            # Handle simple command format
             if isinstance(command, list):
                 for i, arg in enumerate(command):
                     if arg == '--strategy' and i + 1 < len(command):
@@ -3157,15 +3329,30 @@ def validate_config_api(service_name):
         
         if 'command' in service_config:
             command = service_config['command']
-            if isinstance(command, list):
-                command = ' '.join(command)
+            command_str = ""
             
-            # Look for --config parameter in command
-            if '--config' in command:
-                parts = command.split('--config')
+            if isinstance(command, list):
+                command_str = ' '.join(command)
+            elif isinstance(command, str):
+                command_str = command
+            
+            print(f"DEBUG {service_name}: Config command_str: {repr(command_str)}")
+            
+            # Handle shell commands with -c flag
+            if '-c' in command_str and 'freqtrade' in command_str:
+                # Simple approach: just search for --config in the entire command string
+                import re
+                config_match = re.search(r'--config\s+(\S+)', command_str)
+                print(f"DEBUG {service_name}: Config match: {config_match}")
+                if config_match:
+                    config_file = config_match.group(1)  # Keep full Docker path
+                    print(f"DEBUG {service_name}: Config file extracted: {config_file}")
+                        
+            # Handle simple command format
+            if '--config' in command_str:
+                parts = command_str.split('--config')
                 if len(parts) > 1:
-                    config_part = parts[1].strip().split()[0]
-                    config_file = config_part.replace('/freqtrade/user_data/', '')
+                    config_file = parts[1].strip().split()[0]  # Keep full Docker path for consistency
         
         # Also check environment variables
         if 'environment' in service_config:
@@ -3234,7 +3421,7 @@ def validate_all_api(service_name):
                         strategy = command[i + 1]
                     elif arg == '--config' and i + 1 < len(command):
                         config_part = command[i + 1]
-                        config_file = config_part.replace('/freqtrade/user_data/', '')
+                        config_file = config_part  # Keep full Docker path for consistency
         
         # Run all validations
         port_result = manager.validate_port_consistency(service_name, service_config, config_file)
@@ -3328,6 +3515,138 @@ def rationalize_yaml_api():
             'error': str(e)
         })
 
+
+# --- STRATEGY API ENDPOINTS (after app and class definitions, before main) ---
+
+manager = FreqTradeManager()
+
+@app.route('/api/strategy', methods=['POST'])
+def api_create_strategy():
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    code = data.get('code', '')
+    category = data.get('category', 'custom')
+    description = data.get('description', '')
+    if not name or not code:
+        return jsonify({'success': False, 'error': 'Name and code are required.'}), 400
+    filename = secure_filename(f"{name}.py")
+    filepath = STRATEGIES_PATH / filename
+    if filepath.exists():
+        return jsonify({'success': False, 'error': 'File already exists.'}), 409
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(code)
+        # Optionally save description/category to a metadata file
+        meta = {'name': name, 'category': category, 'description': description}
+        with open(STRATEGIES_PATH / f"{name}.meta.json", 'w', encoding='utf-8') as mf:
+            json.dump(meta, mf)
+        return jsonify({'success': True, 'filename': filename})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# --- CLONE STRATEGY ENDPOINT ---
+@app.route('/api/strategy/clone', methods=['POST'])
+def clone_strategy():
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    code = data.get('code', '')
+    category = data.get('category', 'custom')
+    if not name or not code:
+        return jsonify({'success': False, 'error': 'Name and code are required.'}), 400
+    filename = secure_filename(f"{name}.py")
+    filepath = STRATEGIES_PATH / filename
+    if filepath.exists():
+        return jsonify({'success': False, 'error': 'File already exists.'}), 409
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(code)
+        meta = {'name': name, 'category': category}
+        with open(STRATEGIES_PATH / f"{name}.meta.json", 'w', encoding='utf-8') as mf:
+            json.dump(meta, mf)
+        return jsonify({'success': True, 'filename': filename})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/strategy/upload', methods=['POST'])
+def api_upload_strategy():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file uploaded.'}), 400
+    file = request.files['file']
+    category = request.form.get('category', 'custom')
+    overwrite = request.form.get('overwrite', 'false') == 'true'
+    description = request.form.get('description', '')
+    if not file or not file.filename or not file.filename.endswith('.py'):
+        return jsonify({'success': False, 'error': 'Only .py files allowed.'}), 400
+    filename = secure_filename(file.filename)
+    filepath = STRATEGIES_PATH / filename
+    if filepath.exists() and not overwrite:
+        return jsonify({'success': False, 'error': 'File already exists.'}), 409
+    try:
+        file.save(filepath)
+        # Optionally save description/category to a metadata file
+        meta = {'name': filename[:-3], 'category': category, 'description': description}
+        with open(STRATEGIES_PATH / f"{filename[:-3]}.meta.json", 'w', encoding='utf-8') as mf:
+            json.dump(meta, mf)
+        return jsonify({'success': True, 'filename': filename})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/strategy/<filename>')
+def get_strategy(filename):
+    """Get strategy file contents"""
+    try:
+        strategy_path = STRATEGIES_PATH / filename
+        if not strategy_path.exists():
+            return jsonify({'error': 'Strategy not found'}), 404
+        with open(strategy_path, 'r', encoding='utf-8') as f:
+            code = f.read()
+        # Optionally load metadata
+        meta_path = STRATEGIES_PATH / f"{filename[:-3]}.meta.json"
+        meta = {}
+        if meta_path.exists():
+            with open(meta_path, 'r', encoding='utf-8') as mf:
+                meta = json.load(mf)
+        return jsonify({'success': True, 'filename': filename, 'code': code, 'meta': meta})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/strategy/<filename>', methods=['PUT'])
+def update_strategy(filename):
+    """Update the code for a strategy file."""
+    import os
+    from flask import request
+    import re
+    # Only allow .py files
+    if not filename.endswith('.py') or not re.match(r'^[\w\-.]+\.py$', filename):
+        return jsonify({'success': False, 'error': 'Invalid filename.'}), 400
+    strategies_dir = STRATEGIES_PATH if 'STRATEGIES_PATH' in globals() else os.path.join(os.path.dirname(__file__), '../user_data/strategies')
+    file_path = os.path.join(strategies_dir, filename)
+    try:
+        code = request.get_data(as_text=True)
+        # Optionally: add server-side Python syntax validation here
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(code)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/strategy/<filename>', methods=['DELETE'])
+def delete_strategy(filename):
+    """Delete a strategy file"""
+    try:
+        strategy_path = STRATEGIES_PATH / filename
+        meta_path = STRATEGIES_PATH / f"{filename[:-3]}.meta.json"
+        if not strategy_path.exists():
+            return jsonify({'success': False, 'error': 'Strategy not found'}), 404
+        os.remove(strategy_path)
+        if meta_path.exists():
+            os.remove(meta_path)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# --- END STRATEGY API ENDPOINTS ---
+
 @app.route('/api/docker-compose/validate-yaml', methods=['POST'])
 def validate_yaml_api():
     """API endpoint to validate Docker Compose YAML without changes"""
@@ -3353,6 +3672,113 @@ def validate_yaml_api():
             'success': False,
             'error': str(e)
         })
+
+from flask import abort
+import subprocess
+import time
+
+# Helper for TCP Docker client (must be above route)
+def get_tcp_docker_client():
+    try:
+        return docker.DockerClient(base_url='tcp://localhost:2375')
+    except Exception as e:
+        raise RuntimeError(f"Could not connect to Docker via TCP: {e}")
+
+# --- Cloudflared Service API ---
+@app.route('/api/cloudflared/service', methods=['GET', 'POST'])
+def cloudflared_service_api():
+    compose_file = str(Path(__file__).parent / 'cloudflared-compose.yml')
+    container_name = 'cloudflared'
+    # Helper: get status and URL
+    def get_status():
+        try:
+            client = get_tcp_docker_client()
+            containers = client.containers.list(all=True)
+            for c in containers:
+                if container_name in c.name:
+                    status = c.status
+                    url = None
+                    # Try to get the public URL from logs
+                    try:
+                        logs = c.logs(tail=100).decode(errors='ignore')
+                        for line in logs.splitlines():
+                            if 'trycloudflare.com' in line:
+                                for word in line.split():
+                                    if word.startswith('http') and 'trycloudflare.com' in word:
+                                        url = word.strip()
+                                        break
+                    except Exception:
+                        url = None
+                    return {'status': status, 'url': url}
+            return {'status': 'not_created', 'url': None}
+        except Exception as e:
+            return {'status': 'error', 'error': str(e), 'url': None}
+
+    if request.method == 'GET':
+        return jsonify(get_status())
+
+    # POST: action = create/start/stop
+    data = request.get_json(force=True)
+    action = data.get('action')
+    if action == 'create':
+        # docker-compose -f cloudflared-compose.yml up -d
+        try:
+            result = subprocess.run([
+                'docker-compose', '-f', compose_file, 'up', '-d'
+            ], capture_output=True, text=True)
+            if result.returncode != 0:
+                return jsonify({'success': False, 'error': result.stderr}), 500
+            # Wait for container to start and get URL
+            for _ in range(10):
+                status = get_status()
+                if status['status'] == 'running':
+                    break
+                time.sleep(1)
+            return jsonify({'success': True, **get_status()})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    elif action == 'start':
+        try:
+            client = get_tcp_docker_client()
+            c = None
+            for cont in client.containers.list(all=True):
+                if container_name in cont.name:
+                    c = cont
+                    break
+            if not c:
+                return jsonify({'success': False, 'error': 'Container not found'}), 404
+            c.start()
+            # Wait for running
+            for _ in range(10):
+                status = get_status()
+                if status['status'] == 'running':
+                    break
+                time.sleep(1)
+            return jsonify({'success': True, **get_status()})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    elif action == 'stop':
+        try:
+            client = get_tcp_docker_client()
+            c = None
+            for cont in client.containers.list(all=True):
+                if container_name in cont.name:
+                    c = cont
+                    break
+            if not c:
+                return jsonify({'success': False, 'error': 'Container not found'}), 404
+            c.stop()
+            # Wait for stopped
+            for _ in range(10):
+                status = get_status()
+                if status['status'] != 'running':
+                    break
+                time.sleep(1)
+            return jsonify({'success': True, **get_status()})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+    else:
+        return abort(400, 'Invalid action')
 
 if __name__ == '__main__':
     # Create directories if they don't exist
