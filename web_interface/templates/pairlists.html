@@ -1,0 +1,813 @@
+{% extends "base.html" %}
+{% block title %}Pairlists - FreqTrade Manager{% endblock %}
+{% block content %}
+<!-- Move settings button into filter bar row (desktop) -->
+<!-- Pairlist Category Settings Modal -->
+<div class="modal fade" id="pairlistCategorySettingsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Manage Pairlist Categories</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="list-group mb-3" id="pairlistCategoryList">
+                    <!-- Categories will be rendered here as sortable items by JS. Drag handle is shown for reordering. -->
+                </ul>
+                <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="newPairlistCategoryName" placeholder="New category name">
+                    <input type="color" class="form-control form-control-color" id="newPairlistCategoryColor" value="#6c757d" title="Pick color">
+                    <button class="btn btn-success" id="addPairlistCategoryBtn"><i class="fas fa-plus"></i></button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="savePairlistCategoriesBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <h4 class="mb-0"><i class="fas fa-list"></i> Pairlist Management</h4>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-primary pairlist-action-btn" onclick="refreshData()">
+                            <i class="fas fa-sync"></i> Reload Pairlists
+                        </button>
+                        <button type="button" class="btn btn-outline-success pairlist-action-btn" data-bs-toggle="modal" data-bs-target="#createPairlistModal">
+                            <i class="fas fa-plus"></i> Create New
+                        </button>
+                        <button type="button" class="btn btn-outline-info pairlist-action-btn" data-bs-toggle="modal" data-bs-target="#uploadPairlistModal">
+                            <i class="fas fa-upload"></i> Upload New
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3 d-none d-lg-flex align-items-center">
+                        <div class="col-md-8 col-sm-12 d-flex align-items-center">
+                            <div class="btn-group btn-group-sm me-2 align-items-center" role="group">
+                                <button class="btn btn-link p-0 category-filter-btn" id="openPairlistCategorySettingsBtn" data-bs-toggle="modal" data-bs-target="#pairlistCategorySettingsModal" style="height: 100%; box-shadow: none; border: none;">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
+                            <div id="categoryFilterGroup" class="btn-group btn-group-sm" role="group">
+                                <!-- Category filter buttons will be rendered here by JS -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3 d-lg-none align-items-center">
+                        <div class="col-12 d-flex align-items-center">
+                            <button class="btn btn-outline-secondary btn-sm me-2" id="openPairlistCategorySettingsBtn" data-bs-toggle="modal" data-bs-target="#pairlistCategorySettingsModal">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div id="categoryFilterGroupMobile" class="btn-group btn-group-sm w-100" role="group">
+                                <!-- Category filter buttons will be rendered here by JS -->
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Desktop view (hidden on small/medium screens, custom breakpoint) -->
+                    <div class="responsive-table-wrapper">
+                        <div class="table-responsive pairlist-table-responsive">
+                            <table class="table table-striped table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Category</th>
+                                        <th>Pairs</th>
+                                        <th>Filename</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pairlistsTableBody">
+                                    {% for pairlist in pairlists %}
+                                    <tr class="pairlist-row" data-category="{{ pairlist.category }}">
+                                        <td><strong>{{ pairlist.name }}</strong></td>
+                                        <td><span class="badge pairlist-category-badge" data-category="{{ pairlist.category }}">{{ pairlist.category|title }}</span></td>
+                                        <td><span class="badge bg-primary">{{ pairlist.pairs_count }}</span></td>
+                                        <td><code>{{ pairlist.filename }}</code></td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary border-dark" onclick="viewEditPairlist('{{ pairlist.filename }}')" title="View/Edit">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-outline-success border-dark" onclick="copyPairlist('{{ pairlist.filename }}')" title="Clone">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                                <button class="btn btn-outline-info border-dark" onclick="downloadPairlist('{{ pairlist.filename }}')" title="Download">
+                                                    <i class="fas fa-download"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger border-dark" onclick="deletePairlist('{{ pairlist.filename }}')" title="Delete">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- Mobile/Tablet view (visible below custom breakpoint) -->
+                    <div class="responsive-card-list d-none">
+                        {% for pairlist in pairlists %}
+                        <div class="card mb-3 pairlist-card" data-category="{{ pairlist.category }}">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="card-title mb-1">{{ pairlist.name }}</h6>
+                                        <small class="text-muted">{{ pairlist.filename }}</small>
+                                    </div>
+                                    <div class="dropdown">
+                                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li><a class="dropdown-item" href="#" onclick="viewEditPairlist('{{ pairlist.filename }}')">
+                                                <i class="fas fa-eye"></i> View/Edit
+                                            </a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="copyPairlist('{{ pairlist.filename }}')">
+                                                <i class="fas fa-copy"></i> Clone
+                                            </a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><a class="dropdown-item text-danger" href="#" onclick="deletePairlist('{{ pairlist.filename }}')">
+                                                <i class="fas fa-trash"></i> Delete
+                                            </a></li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Category</small>
+                                        <span class="badge pairlist-category-badge" data-category="{{ pairlist.category }}">{{ pairlist.category|title }}</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Pairs</small>
+                                        <span class="badge bg-primary">{{ pairlist.pairs_count }}</span>
+                                    </div>
+                                </div>
+                                <div class="d-grid gap-2 d-md-flex">
+                                    <button class="btn btn-primary btn-sm flex-fill border-dark" onclick="viewEditPairlist('{{ pairlist.filename }}')">
+                                        <i class="fas fa-eye"></i> View/Edit
+                                    </button>
+                                    <button class="btn btn-outline-success btn-sm flex-fill border-dark" onclick="copyPairlist('{{ pairlist.filename }}')">
+                                        <i class="fas fa-copy"></i> Clone
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                                        </div>
+                    <style>
+/* Custom breakpoint for responsive switch (1200px) */
+@media (max-width: 1200px) {
+    .responsive-table-wrapper { display: none !important; }
+    .responsive-card-list { display: block !important; }
+}
+@media (min-width: 1201px) {
+    .responsive-table-wrapper { display: block !important; }
+    .responsive-card-list { display: none !important; }
+}
+/* Drag handle style for sortable category items */
+.drag-handle {
+    cursor: grab;
+    color: #888;
+    font-size: 1.2em;
+    user-select: none;
+}
+.sortable-category-item.dragging {
+    opacity: 0.5;
+}
+</style>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View/Edit Pairlist Modal -->
+<div class="modal fade" id="viewEditPairlistModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewEditPairlistTitle">Pairlist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label for="viewEditPairlistName" class="form-label">Pairlist Name</label>
+                    <input type="text" class="form-control" id="viewEditPairlistName" readonly>
+                </div>
+                <!-- Category selector moved above tabs -->
+                <div class="mb-2" id="pairlistCategoryEditRow">
+                    <label class="form-label">Category</label>
+                    <div id="pairlistCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                        <!-- Category select buttons will be rendered here by JS -->
+                    </div>
+                    <input type="hidden" id="pairlistCategory" value="custom" required>
+                </div>
+                <ul class="nav nav-tabs mb-3" id="pairlistEditTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="visual-tab" data-bs-toggle="tab" data-bs-target="#visual-content" type="button" role="tab">Visual</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="json-tab" data-bs-toggle="tab" data-bs-target="#json-content" type="button" role="tab">JSON</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="pairlistEditTabContent">
+                    <div class="tab-pane fade show active" id="visual-content" role="tabpanel">
+                        <label class="form-label">Pairs</label>
+                        <div id="pairChipsContainer" class="form-control mb-2" style="min-height: 48px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                        <input id="addPairInput" class="form-control mb-2 d-none" type="text" placeholder="Add pair and press Enter">
+                        <!-- visualEditorHint removed -->
+                    </div>
+                    <div class="tab-pane fade" id="json-content" role="tabpanel">
+                        <label class="form-label">Raw JSON</label>
+                        <textarea id="jsonPairlistEditor" class="form-control mb-2" rows="8" readonly></textarea>
+                        <div id="jsonValidationMsg" class="text-danger small mb-2" style="display:none;"></div>
+                        <!-- jsonEditorHint removed -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="editPairlistBtn" onclick="enablePairlistEditing()">Edit</button>
+                <button type="button" class="btn btn-success d-none" id="savePairlistBtn" onclick="savePairlistEdits()">Save</button>
+                <button type="button" class="btn btn-danger d-none" id="cancelEditPairlistBtn" onclick="cancelPairlistEditing()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clone Pairlist Modal -->
+<div class="modal fade" id="clonePairlistModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Clone Pairlist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input id="clonePairlistName" class="form-control mb-2" placeholder="New Pairlist Name">
+                <div class="mb-2">
+                    <label class="form-label">Category</label>
+                    <div id="clonePairlistCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                        <!-- Category select buttons will be rendered here by JS -->
+                    </div>
+                    <input type="hidden" id="clonePairlistCategory" value="custom" required>
+                </div>
+                <textarea id="clonePairlistContent" class="form-control" rows="8"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="clonePairlistSave()">Clone</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Pairlist Modal -->
+<div class="modal fade" id="deletePairlistModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Pairlist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <span id="deletePairlistName"></span>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDeletePairlist()">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+// Unified category picker logic for all modals
+function setupCategoryPicker(groupId, inputId, initialValue = 'custom') {
+    const group = document.getElementById(groupId);
+    const input = document.getElementById(inputId);
+    if (!group || !input) return;
+    group.querySelectorAll('.category-select-btn').forEach(btn => {
+        btn.onclick = function() {
+            group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            input.value = btn.getAttribute('data-value');
+        };
+    });
+    // Set initial value
+    let found = false;
+    group.querySelectorAll('.category-select-btn').forEach(btn => {
+        if (btn.getAttribute('data-value') === initialValue) {
+            btn.classList.add('active');
+            input.value = initialValue;
+            found = true;
+        }
+    });
+    if (!found && group.querySelector('.category-select-btn[data-value="custom"]')) {
+        group.querySelector('.category-select-btn[data-value="custom"]').classList.add('active');
+        input.value = 'custom';
+    }
+}
+function closeModalById(id) {
+    const modal = document.getElementById(id);
+    if (modal) {
+        const instance = bootstrap.Modal.getInstance(modal);
+        if (instance) instance.hide();
+    }
+}
+
+function clonePairlistSave() {
+    const newName = document.getElementById('clonePairlistName').value.trim();
+    const pairs = document.getElementById('clonePairlistContent').value.split(',').map(p => p.trim()).filter(Boolean);
+    if (!newName.endsWith('.json')) {
+        alert('Pairlist filename must end with .json');
+        return;
+    }
+    fetch(`/api/pairlist/${newName}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pair_whitelist: pairs })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            closeModalById('clonePairlistModal');
+            alert('Pairlist cloned successfully!');
+            refreshData();
+        } else {
+            alert('Failed to clone pairlist: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(() => alert('Failed to clone pairlist.'));
+}
+
+function confirmDeletePairlist() {
+    const filename = document.getElementById('deletePairlistName').textContent;
+    fetch(`/api/pairlist/${filename}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                closeModalById('deletePairlistModal');
+                alert('Pairlist deleted successfully!');
+                refreshData();
+            } else {
+                alert('Failed to delete pairlist: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(() => alert('Failed to delete pairlist.'));
+}
+
+
+// uploadPairlist is now handled by app.js
+// Category filter logic is now handled in static/js/app.js
+</script>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+<!-- Create Pairlist Modal -->
+<div class="modal fade" id="createPairlistModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New Pairlist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createPairlistForm">
+                    <div class="mb-3">
+                        <label for="pairlistName" class="form-label">Pairlist Name</label>
+                        <input type="text" class="form-control" id="pairlistName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <div id="createPairlistCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                            <!-- Category select buttons will be rendered here by JS -->
+                        </div>
+                        <input type="hidden" id="createPairlistCategory" value="custom" required>
+                    </div>
+                    <ul class="nav nav-tabs mb-3" id="createPairlistTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="create-visual-tab" data-bs-toggle="tab" data-bs-target="#create-visual-content" type="button" role="tab">Visual</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="create-json-tab" data-bs-toggle="tab" data-bs-target="#create-json-content" type="button" role="tab">JSON</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="createPairlistTabContent">
+                        <div class="tab-pane fade show active" id="create-visual-content" role="tabpanel">
+                            <label class="form-label">Pairs</label>
+                            <div style="display: flex; flex-direction: column; gap: 0;">
+                                <div id="createPairChipsContainer" class="form-control mb-1" style="min-height: 48px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                                <input id="createAddPairInput" class="form-control mb-1" type="text" placeholder="Add pair and press Enter">
+                            </div>
+                            <div id="createPairlistDuplicateWarning" class="text-danger small mt-2" style="display:none;"></div>
+                        </div>
+                        <div class="tab-pane fade" id="create-json-content" role="tabpanel">
+                            <label class="form-label">Raw JSON</label>
+                            <textarea id="createJsonPairlistEditor" class="form-control mb-2" rows="8"></textarea>
+                            <div id="createJsonValidationMsg" class="text-danger small mb-2" style="display:none;"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createPairlistVisual()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Pairlist Modal -->
+<div class="modal fade" id="uploadPairlistModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload Pairlist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="uploadPairlistForm">
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <div id="uploadPairlistCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                            <!-- Category select buttons will be rendered here by JS -->
+                        </div>
+                        <input type="hidden" id="uploadPairlistCategory" value="custom" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="pairlistFile" class="form-label">Select JSON File</label>
+                        <input type="file" class="form-control" id="pairlistFile" accept=".json" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="uploadPairlistBtn" onclick="window.uploadPairlist()">Upload</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// --- Create Pairlist Modal Logic ---
+let createPairlistPairs = [];
+function renderCreatePairChips(pairs) {
+    const container = document.getElementById('createPairChipsContainer');
+    container.innerHTML = '';
+    const seen = new Set();
+    let hasDuplicates = false;
+    pairs.forEach((pair, idx) => {
+        const chip = document.createElement('span');
+        chip.className = 'badge d-flex align-items-center ' + (seen.has(pair) ? 'bg-danger' : 'bg-primary');
+        chip.style.marginRight = '6px';
+        chip.textContent = pair;
+        if (seen.has(pair)) hasDuplicates = true;
+        seen.add(pair);
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'btn-close btn-close-white btn-sm ms-2';
+        closeBtn.style.fontSize = '0.7em';
+        closeBtn.onclick = () => {
+            pairs.splice(idx, 1);
+            renderCreatePairChips(pairs);
+            syncCreateJsonEditor(pairs);
+        };
+        chip.appendChild(closeBtn);
+        container.appendChild(chip);
+    });
+    let warn = document.getElementById('createPairlistDuplicateWarning');
+    warn.style.display = hasDuplicates ? '' : 'none';
+    warn.textContent = hasDuplicates ? 'Duplicate pairs detected! Duplicates are highlighted in red.' : '';
+}
+function syncCreateJsonEditor(pairs) {
+    document.getElementById('createJsonPairlistEditor').value = JSON.stringify({ pair_whitelist: pairs }, null, 2);
+}
+function syncCreateVisualEditorFromJson() {
+    // ...existing code...
+}
+
+// ...existing code...
+</script>
+<style>
+    .category-filter-btn.active, .category-select-btn.active {
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        outline: 2px solid #fff;
+        font-weight: bold;
+    }
+    .category-select-btn.w-20 {
+        width: 20%;
+    }
+</style>
+<script>
+function refreshData() {
+    // Blur the refresh button to remove focus/active state
+    const activeElement = document.activeElement;
+    if (activeElement && activeElement.classList.contains('pairlist-action-btn')) {
+        activeElement.blur();
+    }
+    fetch('/api/pairlists')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update the table body
+                const tbody = document.getElementById('pairlistsTableBody');
+                tbody.innerHTML = '';
+                data.pairlists.forEach(pairlist => {
+                    const tr = document.createElement('tr');
+                    tr.setAttribute('data-category', pairlist.category);
+                    tr.innerHTML = `
+                        <td><strong>${pairlist.name}</strong></td>
+                        <td><span class="badge bg-${pairlist.category === 'test' ? 'warning' : pairlist.category === 'freqai' ? 'info' : pairlist.category === 'full' ? 'success' : 'secondary'}">${pairlist.category.charAt(0).toUpperCase() + pairlist.category.slice(1)}</span></td>
+                        <td><span class="badge bg-primary">${pairlist.pairs_count}</span></td>
+                        <td><code>${pairlist.filename}</code></td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary" onclick="viewEditPairlist('${pairlist.filename}')" title="View/Edit">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-success" onclick="copyPairlist('${pairlist.filename}')" title="Clone">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button class="btn btn-outline-info" onclick="downloadPairlist('${pairlist.filename}')" title="Download">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="deletePairlist('${pairlist.filename}')" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                alert('Failed to refresh pairlists: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(() => alert('Failed to refresh pairlists.'));
+}
+
+
+// let currentPairlistFile = null; // Already declared above, do not redeclare
+let originalPairlistContent = '';
+
+let currentPairlistFile = null;
+let originalPairlistPairs = [];
+let editMode = false;
+
+function renderPairChips(pairs, editable) {
+    const container = document.getElementById('pairChipsContainer');
+    container.innerHTML = '';
+    // Check for duplicates
+    const seen = new Set();
+    let hasDuplicates = false;
+    pairs.forEach((pair, idx) => {
+        const chip = document.createElement('span');
+        chip.className = 'badge d-flex align-items-center ' + (seen.has(pair) ? 'bg-danger' : 'bg-primary');
+        chip.style.marginRight = '6px';
+        chip.textContent = pair;
+        if (seen.has(pair)) hasDuplicates = true;
+        seen.add(pair);
+        if (editable) {
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'btn-close btn-close-white btn-sm ms-2';
+            closeBtn.style.fontSize = '0.7em';
+            closeBtn.onclick = () => {
+                pairs.splice(idx, 1);
+                renderPairChips(pairs, editable);
+                syncJsonEditor(pairs);
+            };
+            chip.appendChild(closeBtn);
+        }
+        container.appendChild(chip);
+    });
+    let warn = document.getElementById('pairlistDuplicateWarning');
+    if (!warn) {
+        warn = document.createElement('div');
+        warn.id = 'pairlistDuplicateWarning';
+        warn.className = 'text-danger small mt-2';
+        container.parentNode.appendChild(warn);
+    }
+    warn.style.display = hasDuplicates ? '' : 'none';
+    warn.textContent = hasDuplicates ? 'Duplicate pairs detected! Duplicates are highlighted in red.' : '';
+}
+
+function syncJsonEditor(pairs) {
+    document.getElementById('jsonPairlistEditor').value = JSON.stringify({ pair_whitelist: pairs }, null, 2);
+}
+
+function syncVisualEditorFromJson() {
+    try {
+        const val = document.getElementById('jsonPairlistEditor').value;
+        const obj = JSON.parse(val);
+        if (Array.isArray(obj.pair_whitelist)) {
+            renderPairChips(obj.pair_whitelist, editMode);
+            return obj.pair_whitelist;
+        }
+    } catch {}
+    return null;
+}
+
+function setPairlistEditMode(enabled) {
+    editMode = enabled;
+    document.getElementById('editPairlistBtn').classList.toggle('d-none', enabled);
+    document.getElementById('savePairlistBtn').classList.toggle('d-none', !enabled);
+    document.getElementById('cancelEditPairlistBtn').classList.toggle('d-none', !enabled);
+    document.getElementById('addPairInput').classList.toggle('d-none', !enabled);
+    document.getElementById('jsonPairlistEditor').readOnly = !enabled;
+    // Category selector: enable/disable buttons
+    const group = document.getElementById('pairlistCategoryGroup');
+    if (group) {
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.disabled = !enabled;
+        });
+    }
+    renderPairChips(currentPairlistPairs, enabled);
+}
+
+let currentPairlistPairs = [];
+
+
+function viewEditPairlist(filename) {
+    currentPairlistFile = filename;
+    document.getElementById('viewEditPairlistTitle').textContent = 'Pairlist: ' + filename;
+    document.getElementById('viewEditPairlistName').value = filename;
+    setPairlistEditMode(false);
+    document.getElementById('jsonValidationMsg').style.display = 'none';
+    document.getElementById('jsonValidationMsg').textContent = '';
+    fetch(`/api/pairlist/${filename}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data && (data.pair_whitelist || data.pairs)) {
+                currentPairlistPairs = [...(data.pair_whitelist || data.pairs || [])];
+                originalPairlistPairs = [...currentPairlistPairs];
+                renderPairChips(currentPairlistPairs, false);
+                syncJsonEditor(currentPairlistPairs);
+            } else {
+                currentPairlistPairs = [];
+                originalPairlistPairs = [];
+                renderPairChips([], false);
+                document.getElementById('jsonPairlistEditor').value = '{\n  "pair_whitelist": []\n}';
+            }
+            var modal = new bootstrap.Modal(document.getElementById('viewEditPairlistModal'));
+            modal.show();
+        })
+        .catch(() => {
+            currentPairlistPairs = [];
+            originalPairlistPairs = [];
+            renderPairChips([], false);
+            document.getElementById('jsonPairlistEditor').value = '{\n  "pair_whitelist": []\n}';
+            var modal = new bootstrap.Modal(document.getElementById('viewEditPairlistModal'));
+            modal.show();
+        });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Add pair on Enter
+    document.getElementById('addPairInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const val = this.value.trim();
+            if (val && !currentPairlistPairs.includes(val)) {
+                currentPairlistPairs.push(val);
+                renderPairChips(currentPairlistPairs, true);
+                syncJsonEditor(currentPairlistPairs);
+            }
+            this.value = '';
+        }
+    });
+    // Sync visual <-> json on tab switch
+    document.getElementById('json-tab').addEventListener('shown.bs.tab', function() {
+        syncJsonEditor(currentPairlistPairs);
+    });
+    document.getElementById('visual-tab').addEventListener('shown.bs.tab', function() {
+        const pairs = syncVisualEditorFromJson();
+        if (pairs) currentPairlistPairs = pairs;
+    });
+    // Validate JSON on input
+    document.getElementById('jsonPairlistEditor').addEventListener('input', function() {
+        if (!editMode) return;
+        try {
+            const obj = JSON.parse(this.value);
+            if (!Array.isArray(obj.pair_whitelist)) throw new Error('pair_whitelist must be an array');
+            document.getElementById('jsonValidationMsg').style.display = 'none';
+            renderPairChips(obj.pair_whitelist, true);
+            currentPairlistPairs = obj.pair_whitelist;
+        } catch (e) {
+            document.getElementById('jsonValidationMsg').textContent = 'Invalid JSON: ' + e.message;
+            document.getElementById('jsonValidationMsg').style.display = 'block';
+        }
+    });
+});
+
+function enablePairlistEditing() {
+
+    setPairlistEditMode(true);
+}
+
+function cancelPairlistEditing() {
+
+    currentPairlistPairs = [...originalPairlistPairs];
+    setPairlistEditMode(false);
+    syncJsonEditor(currentPairlistPairs);
+    document.getElementById('jsonValidationMsg').style.display = 'none';
+}
+
+function savePairlistEdits() {
+
+    // Validate JSON before saving
+    try {
+        const obj = JSON.parse(document.getElementById('jsonPairlistEditor').value);
+        if (!Array.isArray(obj.pair_whitelist)) throw new Error('pair_whitelist must be an array');
+        // Check for duplicates
+        const seen = new Set();
+        const dups = obj.pair_whitelist.filter(p => {
+            if (seen.has(p)) return true;
+            seen.add(p); return false;
+        });
+        if (dups.length > 0) {
+            document.getElementById('jsonValidationMsg').textContent = 'Duplicate pairs detected: ' + dups.join(', ');
+            document.getElementById('jsonValidationMsg').style.display = 'block';
+            return;
+        }
+        currentPairlistPairs = obj.pair_whitelist;
+    } catch (e) {
+        document.getElementById('jsonValidationMsg').textContent = 'Invalid JSON: ' + e.message;
+        document.getElementById('jsonValidationMsg').style.display = 'block';
+        return;
+    }
+    fetch(`/api/pairlist/${currentPairlistFile}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pair_whitelist: currentPairlistPairs })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            originalPairlistPairs = [...currentPairlistPairs];
+            cancelPairlistEditing();
+            alert('Pairlist updated successfully!');
+            refreshData();
+        } else {
+            alert('Failed to update pairlist: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(() => alert('Failed to update pairlist.'));
+}
+
+function copyPairlist(filename) {
+    document.getElementById('clonePairlistName').value = filename.replace('.json', '_copy.json');
+    document.getElementById('clonePairlistContent').value = 'Loading...';
+    fetch(`/api/pairlist/${filename}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data && (data.pair_whitelist || data.pairs)) {
+                const pairs = data.pair_whitelist || data.pairs || [];
+                document.getElementById('clonePairlistContent').value = pairs.join(', ');
+            } else {
+                document.getElementById('clonePairlistContent').value = 'Failed to load pairlist for cloning.';
+            }
+        })
+        .catch(() => {
+            document.getElementById('clonePairlistContent').value = 'Failed to load pairlist for cloning.';
+        });
+    new bootstrap.Modal(document.getElementById('clonePairlistModal')).show();
+}
+
+function deletePairlist(filename) {
+    document.getElementById('deletePairlistName').textContent = filename;
+    var modalEl = document.getElementById('deletePairlistModal');
+    var modal = new bootstrap.Modal(modalEl);
+    // Remove any previous click handlers to avoid stacking
+    var btn = modalEl.querySelector('.btn-danger');
+    var newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.onclick = function() {
+        fetch(`/api/pairlist/${filename}`, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    modal.hide();
+                    alert('Pairlist deleted successfully!');
+                    refreshData();
+                } else {
+                    alert('Failed to delete pairlist: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(() => alert('Failed to delete pairlist.'));
+    };
+    modal.show();
+}
+</script>
+{% endblock %}

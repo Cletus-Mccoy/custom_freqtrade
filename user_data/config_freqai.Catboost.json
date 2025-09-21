@@ -124,14 +124,14 @@
     "strategy": "FreqaiExampleStrategy",
     "db_url": "sqlite:////freqtrade/user_data/tradesv3.sqlite",
     "api_server": {
-            "enabled": true,
-            "listen_ip_address": "0.0.0.0",
-            "listen_port": 8080,
-            "verbosity": "error",
-            "enable_openapi": true,
-            "username": "freq",
-            "password": "abcdef",
-            "jwt_secret_key": "wegew4g6e4g6f84afaf1dqw51d6qw1f6",
-            "ws_token": "VYgmmHtGEkcGLtuLJ3onmkk7wB4ef0-_5g"
-        }
+        "enabled": true,
+        "listen_ip_address": "0.0.0.0",
+        "listen_port": 8080,
+        "verbosity": "error",
+        "enable_openapi": true,
+        "username": "freq",
+        "password": "abcdef",
+        "jwt_secret_key": "wegew4g6e4g6f84afaf1dqw51d6qw1f6",
+        "ws_token": "VYgmmHtGEkcGLtuLJ3onmkk7wB4ef0-_5g"
+    }
 }

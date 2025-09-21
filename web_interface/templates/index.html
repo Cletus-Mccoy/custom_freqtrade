@@ -1,0 +1,548 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - FreqTrade Manager{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
+            <h1><i class="fas fa-tachometer-alt"></i> FreqTrade Dashboard</h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Container Status Overview -->
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fab fa-docker"></i> Container Status</h5>
+            </div>
+            <div class="card-body">
+                {% set running_count = 0 %}
+                {% set stopped_count = 0 %}
+                
+                <div class="row text-center" id="containerStats">
+                    <div class="col-6">
+                        <h2 class="text-success mb-1" id="runningCount">0</h2>
+                        <small>Running</small>
+                    </div>
+                    <div class="col-6">
+                        <h2 class="text-danger mb-1" id="stoppedCount">0</h2>
+                        <small>Stopped</small>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-success" role="progressbar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted mt-2 d-block" id="progressText">0 of 0 containers running</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5><i class="fas fa-bolt"></i> Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="btn-group btn-group-sm w-100">
+                    <button type="button" class="btn btn-outline-success" onclick="startAllContainers()">
+                        <i class="fas fa-play"></i> Start All
+                    </button>
+                    <button type="button" class="btn btn-outline-warning" onclick="restartAllContainers()">
+                        <i class="fas fa-redo"></i> Restart All
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" onclick="stopAllContainers()">
+                        <i class="fas fa-stop"></i> Stop All
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Container List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5><i class="fas fa-list"></i> FreqTrade Stack Containers</h5>
+            </div>
+            <div class="card-body">
+                <div id="containersTableContainer">
+                    <!-- Containers will be loaded here via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Logs Modal -->
+<div class="modal fade" id="logsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="logsModalTitle">Container Logs</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-primary active" id="logsTab" onclick="switchTab('logs')">
+                            <i class="fas fa-file-alt"></i> Logs
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="terminalTab" onclick="switchTab('terminal')">
+                            <i class="fas fa-terminal"></i> Terminal
+                        </button>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-info" onclick="refreshLogs()">
+                            <i class="fas fa-sync"></i> Refresh
+                        </button>
+                        <button type="button" class="btn btn-outline-success" id="autoRefreshBtn" onclick="toggleAutoRefreshLogs()">
+                            <i class="fas fa-play"></i> Auto-refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Logs Content -->
+                <div id="logsContent" style="display: block;">
+                    <pre id="logsText" class="bg-dark text-light p-3" style="height: 500px; overflow-y: auto; font-size: 12px;"></pre>
+                </div>
+                
+                <!-- Terminal Content -->
+                <div id="terminalContent" style="display: none;">
+                    <div class="bg-dark text-light p-3" style="height: 500px; overflow-y: auto; font-size: 12px;">
+                        <div id="terminalOutput"></div>
+                        <div class="input-group mt-2">
+                            <span class="input-group-text bg-secondary text-light">$</span>
+                            <input type="text" class="form-control bg-dark text-light border-secondary" id="terminalInput" placeholder="Enter command..." onkeypress="handleTerminalInput(event)">
+                            <button class="btn btn-outline-success" onclick="executeCommand()">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" id="clearLogsBtn" onclick="clearLogs()">
+                    <i class="fas fa-trash"></i> Clear
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentContainer = '';
+
+// Auto-refresh every 5 seconds
+setInterval(loadDashboardData, 5000);
+window.addEventListener('DOMContentLoaded', loadDashboardData);
+
+function loadDashboardData() {
+    fetch('/api/docker/containers')
+        .then(response => response.json())
+        .then(data => {
+            if (data.containers) {
+                updateContainerStats(data.containers);
+                renderContainersTable(data.containers);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading containers:', error);
+        });
+}
+
+function updateContainerStats(containers) {
+    const runningCount = containers.filter(c => c.status === 'running').length;
+    const stoppedCount = containers.length - runningCount;
+    const total = containers.length;
+    const runningPct = total > 0 ? Math.floor((runningCount / total) * 100) : 0;
+    
+    document.getElementById('runningCount').textContent = runningCount;
+    document.getElementById('stoppedCount').textContent = stoppedCount;
+    document.getElementById('progressBar').style.width = runningPct + '%';
+    document.getElementById('progressBar').setAttribute('aria-valuenow', runningPct);
+    document.getElementById('progressText').textContent = `${runningCount} of ${total} containers running`;
+}
+
+function renderContainersTable(containers) {
+    const container = document.getElementById('containersTableContainer');
+    if (!container) return;
+    
+    if (!containers || containers.length === 0) {
+        container.innerHTML = `<div class="text-center py-4">
+            <i class="fas fa-cubes fa-3x text-muted mb-3"></i>
+            <h5>No containers currently running</h5>
+            <p class="text-muted">Use docker-compose to start your FreqTrade stack</p>
+        </div>`;
+        return;
+    }
+    
+    let html = `<div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>Container</th>
+                    <th>Status</th>
+                    <th>Image</th>
+                    <th>Ports</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>`;
+    
+    containers.forEach(container => {
+        let statusBadge = '';
+        if (container.status === 'running') {
+            statusBadge = '<span class="badge bg-success"><i class="fas fa-play"></i> Running</span>';
+        } else if (container.status === 'exited') {
+            statusBadge = '<span class="badge bg-danger"><i class="fas fa-stop"></i> Exited</span>';
+        } else {
+            statusBadge = `<span class="badge bg-warning"><i class="fas fa-pause"></i> ${container.status || 'Unknown'}</span>`;
+        }
+        
+        // Separate ports and created date
+        let portsHtml = '';
+        let createdHtml = '';
+        
+        // Handle ports
+        if (container.ports && Object.keys(container.ports).length > 0) {
+            for (const [containerPort, hostBindings] of Object.entries(container.ports)) {
+                if (hostBindings && hostBindings.length > 0) {
+                    hostBindings.forEach(binding => {
+                        if (binding.HostPort) {
+                            const hostPort = binding.HostPort;
+                            const containerPortNum = containerPort.replace('/tcp', '').replace('/udp', '');
+                            portsHtml += `<a href="http://localhost:${hostPort}" target="_blank" class="btn btn-outline-info btn-sm me-1 mb-1" title="Open localhost:${hostPort}">
+                                <i class="fas fa-external-link-alt"></i> ${hostPort}:${containerPortNum}
+                            </a>`;
+                        }
+                    });
+                }
+            }
+        }
+        
+        if (!portsHtml) {
+            portsHtml = '<small class="text-muted">No ports exposed</small>';
+        }
+        
+        // Handle created date
+        if (container.created) {
+            const createdDate = new Date(container.created);
+            createdHtml = `<small>${createdDate.toLocaleDateString()} ${createdDate.toLocaleTimeString()}</small>`;
+        } else {
+            createdHtml = '<small class="text-muted">Unknown</small>';
+        }
+        
+        let actionButtons = '';
+        if (container.status === 'running') {
+            actionButtons = `
+                <button class="btn btn-outline-warning btn-sm" onclick="containerAction('restart', '${container.name}')" title="Restart">
+                    <i class="fas fa-redo"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-sm" onclick="containerAction('stop', '${container.name}')" title="Stop">
+                    <i class="fas fa-stop"></i>
+                </button>`;
+        } else {
+            actionButtons = `
+                <button class="btn btn-outline-success btn-sm" onclick="containerAction('start', '${container.name}')" title="Start">
+                    <i class="fas fa-play"></i>
+                </button>`;
+        }
+        actionButtons += `
+            <button class="btn btn-outline-info btn-sm" onclick="showLogsTerminal('${container.name}')" title="Logs & Terminal">
+                <i class="fas fa-terminal"></i>
+            </button>
+            <button class="btn btn-outline-danger btn-sm" onclick="containerAction('remove', '${container.name}')" title="Remove">
+                <i class="fas fa-trash"></i>
+            </button>`;
+        
+        html += `<tr>
+            <td>
+                <strong>${container.name}</strong><br>
+                <small class="text-muted">${container.id || 'N/A'}</small>
+            </td>
+            <td>${statusBadge}</td>
+            <td><small>${container.image || 'N/A'}</small></td>
+            <td>${portsHtml}</td>
+            <td>${createdHtml}</td>
+            <td>
+                <div class="btn-group btn-group-sm" role="group">
+                    ${actionButtons}
+                </div>
+            </td>
+        </tr>`;
+    });
+    
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+}
+
+function containerAction(action, containerName) {
+    if (action === 'remove' && !confirm(`Are you sure you want to remove container ${containerName}?`)) {
+        return;
+    }
+    
+    fetch(`/api/container/${action}/${containerName}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showAlert('danger', data.error || 'Operation failed');
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error: ' + error.message);
+    });
+}
+
+let logsAutoRefreshInterval;
+let isLogsAutoRefreshEnabled = false;
+
+function showLogsTerminal(containerName) {
+    currentContainer = containerName;
+    document.getElementById('logsModalTitle').textContent = `${containerName} - Logs & Terminal`;
+    
+    // Reset to logs tab
+    switchTab('logs');
+    
+    // Load initial logs
+    refreshLogs();
+    
+    // Show modal
+    new bootstrap.Modal(document.getElementById('logsModal')).show();
+}
+
+function switchTab(tab) {
+    const logsTab = document.getElementById('logsTab');
+    const terminalTab = document.getElementById('terminalTab');
+    const logsContent = document.getElementById('logsContent');
+    const terminalContent = document.getElementById('terminalContent');
+    
+    if (tab === 'logs') {
+        logsTab.classList.add('active');
+        logsTab.classList.remove('btn-outline-primary');
+        logsTab.classList.add('btn-primary');
+        
+        terminalTab.classList.remove('active');
+        terminalTab.classList.remove('btn-secondary');
+        terminalTab.classList.add('btn-outline-secondary');
+        
+        logsContent.style.display = 'block';
+        terminalContent.style.display = 'none';
+        
+        refreshLogs();
+    } else {
+        terminalTab.classList.add('active');
+        terminalTab.classList.remove('btn-outline-secondary');
+        terminalTab.classList.add('btn-secondary');
+        
+        logsTab.classList.remove('active');
+        logsTab.classList.remove('btn-primary');
+        logsTab.classList.add('btn-outline-primary');
+        
+        logsContent.style.display = 'none';
+        terminalContent.style.display = 'block';
+        
+        // Focus terminal input
+        setTimeout(() => {
+            document.getElementById('terminalInput').focus();
+        }, 100);
+    }
+}
+
+function toggleAutoRefreshLogs() {
+    const btn = document.getElementById('autoRefreshBtn');
+    
+    if (isLogsAutoRefreshEnabled) {
+        // Stop auto-refresh
+        if (logsAutoRefreshInterval) {
+            clearInterval(logsAutoRefreshInterval);
+            logsAutoRefreshInterval = null;
+        }
+        isLogsAutoRefreshEnabled = false;
+        btn.innerHTML = '<i class="fas fa-play"></i> Auto-refresh';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-outline-success');
+    } else {
+        // Start auto-refresh
+        logsAutoRefreshInterval = setInterval(refreshLogs, 2000); // Every 2 seconds
+        isLogsAutoRefreshEnabled = true;
+        btn.innerHTML = '<i class="fas fa-pause"></i> Stop Auto-refresh';
+        btn.classList.remove('btn-outline-success');
+        btn.classList.add('btn-success');
+    }
+}
+
+function clearLogs() {
+    document.getElementById('logsText').textContent = '';
+    document.getElementById('terminalOutput').innerHTML = '';
+}
+
+function handleTerminalInput(event) {
+    if (event.key === 'Enter') {
+        executeCommand();
+    }
+}
+
+function executeCommand() {
+    const input = document.getElementById('terminalInput');
+    const command = input.value.trim();
+    const output = document.getElementById('terminalOutput');
+    
+    if (!command) return;
+    
+    // Add command to output
+    output.innerHTML += `<div class="text-info">$ ${command}</div>`;
+    
+    // Execute command (this is a simulation - real terminal execution would need backend implementation)
+    if (command === 'help') {
+        output.innerHTML += `<div class="text-light">Available commands:
+- help: Show this help
+- ps: Show running processes
+- df: Show disk usage
+- ls: List files
+- clear: Clear terminal
+Note: This is a simulated terminal. Real command execution requires backend implementation.</div>`;
+    } else if (command === 'clear') {
+        output.innerHTML = '';
+    } else if (command === 'ps') {
+        output.innerHTML += `<div class="text-light">PID   COMMAND
+1     /usr/bin/python3 freqtrade trade
+15    bash</div>`;
+    } else if (command === 'df') {
+        output.innerHTML += `<div class="text-light">Filesystem     Size  Used Avail Use%
+/dev/root      20G   5.2G   14G  28%</div>`;
+    } else if (command === 'ls') {
+        output.innerHTML += `<div class="text-light">config.json  strategies/  user_data/  freqtrade/</div>`;
+    } else {
+        // For real implementation, send command to backend
+        output.innerHTML += `<div class="text-warning">Command simulation: ${command}
+For real terminal access, backend implementation needed.</div>`;
+    }
+    
+    // Clear input and scroll to bottom
+    input.value = '';
+    output.scrollTop = output.scrollHeight;
+}
+
+function showLogs(containerName) {
+    // Backward compatibility
+    showLogsTerminal(containerName);
+}
+
+function refreshLogs() {
+    if (!currentContainer) return;
+    
+    fetch(`/api/container/logs/${currentContainer}`)
+    .then(response => response.json())
+    .then(data => {
+        const logsElement = document.getElementById('logsText');
+        if (data.logs) {
+            logsElement.textContent = data.logs;
+            // Auto scroll to bottom
+            logsElement.scrollTop = logsElement.scrollHeight;
+        } else {
+            logsElement.textContent = data.error || 'No logs available';
+        }
+    })
+    .catch(error => {
+        document.getElementById('logsText').textContent = 'Error loading logs: ' + error.message;
+    });
+}
+
+function startAllContainers() {
+    if (!confirm('Start all FreqTrade containers?')) return;
+    showAlert('info', 'Starting all containers...');
+    
+    fetch('/api/docker/start-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message || 'All containers started successfully');
+            setTimeout(() => loadDashboardData(), 2000);
+        } else {
+            showAlert('danger', data.error || 'Failed to start containers');
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error: ' + error.message);
+    });
+}
+
+function restartAllContainers() {
+    if (!confirm('Restart all FreqTrade containers?')) return;
+    showAlert('info', 'Restarting all containers...');
+    
+    fetch('/api/docker/restart-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message || 'All containers restarted successfully');
+            setTimeout(() => loadDashboardData(), 2000);
+        } else {
+            showAlert('danger', data.error || 'Failed to restart containers');
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error: ' + error.message);
+    });
+}
+
+function stopAllContainers() {
+    if (!confirm('Stop all FreqTrade containers?')) return;
+    showAlert('info', 'Stopping all containers...');
+    
+    fetch('/api/docker/stop-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message || 'All containers stopped successfully');
+            setTimeout(() => loadDashboardData(), 2000);
+        } else {
+            showAlert('danger', data.error || 'Failed to stop containers');
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error: ' + error.message);
+    });
+}
+
+function showAlert(type, message) {
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} alert-dismissible fade show`;
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+}
+</script>
+{% endblock %}

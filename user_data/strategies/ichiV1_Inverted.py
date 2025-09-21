@@ -15,18 +15,15 @@ from freqtrade.strategy import stoploss_from_open
 
 class ichiV1(IStrategy):
 
-    # NOTE: settings as of the 25th july 21
     # Buy hyperspace params:
     buy_params = {
         "buy_trend_above_senkou_level": 1,
         "buy_trend_bullish_level": 6,
         "buy_fan_magnitude_shift_value": 3,
-        "buy_min_fan_magnitude_gain": 1.002 # NOTE: Good value (Win% ~70%), alot of trades
-        #"buy_min_fan_magnitude_gain": 1.008 # NOTE: Very save value (Win% ~90%), only the biggest moves 1.008,
+        "buy_min_fan_magnitude_gain": 1.002
     }
 
     # Sell hyperspace params:
-    # NOTE: was 15m but kept bailing out in dryrun
     sell_params = {
         "sell_trend_indicator": "trend_close_2h",
     }
@@ -39,34 +36,24 @@ class ichiV1(IStrategy):
         "114": 0
     }
 
-    # Stoploss:
     stoploss = -0.275
-
-    # Optimal timeframe for the strategy
     timeframe = '5m'  
-
     startup_candle_count = 200
     process_only_new_candles = True
 
     trailing_stop = False
-    #trailing_stop_positive = 0.002
-    #trailing_stop_positive_offset = 0.025
-    #trailing_only_offset_is_reached = True
-
-    use_exit_signal = True  # Updated from use_sell_signal
-    exit_profit_only = False  # Updated from sell_profit_only
-    ignore_roi_if_entry_signal = False  # Updated from ignore_roi_if_buy_signal
+    use_exit_signal = True
+    exit_profit_only = False
+    ignore_roi_if_entry_signal = False
 
     plot_config = {
         'main_plot': {
-            # fill area between senkou_a and senkou_b
             'senkou_a': {
-                'color': 'green', #optional
+                'color': 'green',
                 'fill_to': 'senkou_b',
-                'fill_label': 'Ichimoku Cloud', #optional
-                'fill_color': 'rgba(255,76,46,0.2)', #optional
+                'fill_label': 'Ichimoku Cloud',
+                'fill_color': 'rgba(255,76,46,0.2)',
             },
-            # plot senkou_b, too. Not only the area to it.
             'senkou_b': {},
             'trend_close_5m': {'color': '#FF5733'},
             'trend_close_15m': {'color': '#FF8333'},
@@ -87,95 +74,53 @@ class ichiV1(IStrategy):
         }
     }
 
+    # ------------- Feature Engineering (unchanged) -------------
     def feature_engineering_expand_all(self, dataframe: DataFrame, period: int, metadata: dict, **kwargs) -> DataFrame:
-        """
-        *Only functional with FreqAI enabled strategies*
-        This function will automatically expand the defined features on the config defined
-        `include_timeframes`, `include_shifted_candles`, and `include_corr_pairs`.
-        """
-        # Add Ichimoku features with safety checks
         safe_period = max(3, period) if period is not None else 14
-        safe_kijun_period = max(9, safe_period * 3)  # Ensure minimum period for kijun
-        
+        safe_kijun_period = max(9, safe_period * 3)
         dataframe[f"%-ichimoku_tenkan_period_{period}"] = ta.SMA(dataframe["close"], timeperiod=safe_period)
         dataframe[f"%-ichimoku_kijun_period_{period}"] = ta.SMA(dataframe["close"], timeperiod=safe_kijun_period)
-        
-        # Add EMA features for different periods with safety checks
         dataframe[f"%-ema_{period}"] = ta.EMA(dataframe["close"], timeperiod=safe_period)
         dataframe[f"%-ema_open_{period}"] = ta.EMA(dataframe["open"], timeperiod=safe_period)
-        
-        # Add fan magnitude features
         if period is None or not isinstance(period, int) or period <= 0:
             period = 8  
-
         if period >= 8:
-            # Ensure minimum timeperiods to avoid NaN values
-            short_timeperiod = max(3, period // 8)  # Minimum 3 instead of 1
-            long_timeperiod = max(5, period)  # Ensure long period is at least 5
-            
+            short_timeperiod = max(3, period // 8)
+            long_timeperiod = max(5, period)
             short_ema = ta.EMA(dataframe["close"], timeperiod=short_timeperiod)
             long_ema = ta.EMA(dataframe["close"], timeperiod=long_timeperiod)
-            
-            # Add safety check to avoid division by zero
             with np.errstate(divide='ignore', invalid='ignore'):
                 fan_magnitude = short_ema / long_ema
-                # Replace any inf or nan values with 1.0 (neutral)
                 fan_magnitude = np.where(np.isfinite(fan_magnitude), fan_magnitude, 1.0)
                 dataframe[f"%-fan_magnitude_{period}"] = fan_magnitude
-                
-                # Calculate gain with safety checks
                 fan_magnitude_shifted = dataframe[f"%-fan_magnitude_{period}"].shift(1)
                 fan_magnitude_gain = dataframe[f"%-fan_magnitude_{period}"] / fan_magnitude_shifted
                 fan_magnitude_gain = np.where(np.isfinite(fan_magnitude_gain), fan_magnitude_gain, 1.0)
                 dataframe[f"%-fan_magnitude_gain_{period}"] = fan_magnitude_gain
-        
-        # Add ATR with safety checks
-        atr_period = max(3, period)  # Ensure minimum period for ATR
+        atr_period = max(3, period)
         dataframe[f"%-atr_{atr_period}"] = ta.ATR(dataframe, timeperiod=atr_period)
-        
         return dataframe
 
     def feature_engineering_expand_basic(self, dataframe: DataFrame, metadata: dict, **kwargs) -> DataFrame:
-        """
-        *Only functional with FreqAI enabled strategies*
-        This function will automatically expand the defined features on the config defined
-        `include_timeframes`, `include_shifted_candles`, and `include_corr_pairs`.
-        All features must be prepended with `%` to be recognized by FreqAI internals.
-        """
-        # Add basic Ichimoku cloud features
         dataframe["%-rsi"] = ta.RSI(dataframe, timeperiod=14)
         dataframe["%-mfi"] = ta.MFI(dataframe, timeperiod=14)
         dataframe["%-adx"] = ta.ADX(dataframe, timeperiod=14)
         dataframe["%-sma"] = ta.SMA(dataframe, timeperiod=14)
         dataframe["%-ema"] = ta.EMA(dataframe, timeperiod=14)
-        
-        # Bollinger bands with safety checks
         bollinger = qtpylib.bollinger_bands(dataframe["close"], window=20, stds=2)
         dataframe["%-bb_lowerband"] = bollinger["lower"]
         dataframe["%-bb_middleband"] = bollinger["mid"]
         dataframe["%-bb_upperband"] = bollinger["upper"]
-        
-        # Safe BB percent calculation
         bb_range = bollinger["upper"] - bollinger["lower"]
         with np.errstate(divide='ignore', invalid='ignore'):
             bb_percent = (dataframe["close"] - bollinger["lower"]) / bb_range
             bb_width = bb_range / bollinger["mid"]
-            # Replace any inf or nan values with neutral values
             dataframe["%-bb_percent"] = np.where(np.isfinite(bb_percent), bb_percent, 0.5)
             dataframe["%-bb_width"] = np.where(np.isfinite(bb_width), bb_width, 0.1)
-        
         return dataframe
 
     def feature_engineering_standard(self, dataframe: DataFrame, metadata: dict, **kwargs) -> DataFrame:
-        """
-        *Only functional with FreqAI enabled strategies*
-        This function will be called once with the dataframe of the base timeframe.
-        All features must be prepended with `%` to be recognized by FreqAI internals.
-        """
-        # Add the original Ichimoku indicators as features with NaN handling
         ichimoku = ftt.ichimoku(dataframe, conversion_line_period=20, base_line_periods=60, laggin_span=120, displacement=30)
-        
-        # Handle potential NaN values in Ichimoku indicators
         dataframe['%-chikou_span'] = ichimoku['chikou_span'].ffill().bfill()
         dataframe['%-tenkan_sen'] = ichimoku['tenkan_sen'].ffill().bfill()
         dataframe['%-kijun_sen'] = ichimoku['kijun_sen'].ffill().bfill()
@@ -185,57 +130,37 @@ class ichiV1(IStrategy):
         dataframe['%-leading_senkou_span_b'] = ichimoku['leading_senkou_span_b'].ffill().bfill()
         dataframe['%-cloud_green'] = ichimoku['cloud_green'].fillna(0).astype(int)
         dataframe['%-cloud_red'] = ichimoku['cloud_red'].fillna(0).astype(int)
-        
-        # Add price position relative to cloud with safety checks
         cloud_comparison = ((dataframe['close'] > dataframe['%-senkou_a']) & 
                            (dataframe['close'] > dataframe['%-senkou_b']))
         dataframe['%-price_above_cloud'] = cloud_comparison.fillna(False).astype(int)
-        
-        # Add trend strength features with safety checks
         with np.errstate(divide='ignore', invalid='ignore'):
             close_open_ratio = dataframe['close'] / dataframe['open']
             dataframe['%-close_open_ratio'] = np.where(np.isfinite(close_open_ratio), close_open_ratio, 1.0)
-        
         return dataframe
 
     def set_freqai_targets(self, dataframe: DataFrame, metadata: dict, **kwargs) -> DataFrame:
-        """
-        *Only functional with FreqAI enabled strategies*
-        Required function to set the targets for the machine learning model.
-        All targets must be prepended with `&` to be recognized by FreqAI internals.
-        """
-        # Predict future price movement (5 candles ahead) with safety checks
         future_close = dataframe["close"].shift(-5)
         current_close = dataframe["close"]
-        
         with np.errstate(divide='ignore', invalid='ignore'):
             price_change = future_close / current_close - 1
-            # Replace any inf or nan values with 0 (no change)
             dataframe["&-target"] = np.where(np.isfinite(price_change), price_change, 0.0)
-        
         return dataframe
 
+    # ------------- Indicators (unchanged) -------------
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        # Start FreqAI first
         dataframe = self.freqai.start(dataframe, metadata, self)
-
-        # Apply Heikin Ashi transformation (KEEPING THE ORIGINAL)
         heikinashi = qtpylib.heikinashi(dataframe)
         dataframe['open'] = heikinashi['open']
-        #dataframe['close'] = heikinashi['close']  # Keep original close for signals
         dataframe['high'] = heikinashi['high']
         dataframe['low'] = heikinashi['low']
-
-        # Calculate ALL original trend indicators (adjusted periods for 3m timeframe)
         dataframe['trend_close_5m'] = dataframe['close']
-        dataframe['trend_close_15m'] = ta.EMA(dataframe['close'], timeperiod=5)   # 15m equivalent for 3m
-        dataframe['trend_close_30m'] = ta.EMA(dataframe['close'], timeperiod=10)  # 30m equivalent for 3m
-        dataframe['trend_close_1h'] = ta.EMA(dataframe['close'], timeperiod=20)   # 1h equivalent for 3m
-        dataframe['trend_close_2h'] = ta.EMA(dataframe['close'], timeperiod=40)   # 2h equivalent for 3m
-        dataframe['trend_close_4h'] = ta.EMA(dataframe['close'], timeperiod=80)   # 4h equivalent for 3m
-        dataframe['trend_close_6h'] = ta.EMA(dataframe['close'], timeperiod=120)  # 6h equivalent for 3m
-        dataframe['trend_close_8h'] = ta.EMA(dataframe['close'], timeperiod=160)  # 8h equivalent for 3m
-
+        dataframe['trend_close_15m'] = ta.EMA(dataframe['close'], timeperiod=5)
+        dataframe['trend_close_30m'] = ta.EMA(dataframe['close'], timeperiod=10)
+        dataframe['trend_close_1h'] = ta.EMA(dataframe['close'], timeperiod=20)
+        dataframe['trend_close_2h'] = ta.EMA(dataframe['close'], timeperiod=40)
+        dataframe['trend_close_4h'] = ta.EMA(dataframe['close'], timeperiod=80)
+        dataframe['trend_close_6h'] = ta.EMA(dataframe['close'], timeperiod=120)
+        dataframe['trend_close_8h'] = ta.EMA(dataframe['close'], timeperiod=160)
         dataframe['trend_open_5m'] = dataframe['open']
         dataframe['trend_open_15m'] = ta.EMA(dataframe['open'], timeperiod=5)
         dataframe['trend_open_30m'] = ta.EMA(dataframe['open'], timeperiod=10)
@@ -244,17 +169,12 @@ class ichiV1(IStrategy):
         dataframe['trend_open_4h'] = ta.EMA(dataframe['open'], timeperiod=80)
         dataframe['trend_open_6h'] = ta.EMA(dataframe['open'], timeperiod=120)
         dataframe['trend_open_8h'] = ta.EMA(dataframe['open'], timeperiod=160)
-
-        # Calculate fan magnitude (KEEPING THE ORIGINAL) with safety checks
         with np.errstate(divide='ignore', invalid='ignore'):
             fan_magnitude = dataframe['trend_close_1h'] / dataframe['trend_close_8h']
             dataframe['fan_magnitude'] = np.where(np.isfinite(fan_magnitude), fan_magnitude, 1.0)
-            
             fan_magnitude_shifted = dataframe['fan_magnitude'].shift(1)
             fan_magnitude_gain = dataframe['fan_magnitude'] / fan_magnitude_shifted
             dataframe['fan_magnitude_gain'] = np.where(np.isfinite(fan_magnitude_gain), fan_magnitude_gain, 1.0)
-
-        # Calculate Ichimoku indicators (KEEPING THE ORIGINAL) with NaN handling
         ichimoku = ftt.ichimoku(dataframe, conversion_line_period=20, base_line_periods=60, laggin_span=120, displacement=30)
         dataframe['chikou_span'] = ichimoku['chikou_span'].ffill().bfill()
         dataframe['tenkan_sen'] = ichimoku['tenkan_sen'].ffill().bfill()
@@ -265,107 +185,42 @@ class ichiV1(IStrategy):
         dataframe['leading_senkou_span_b'] = ichimoku['leading_senkou_span_b'].ffill().bfill()
         dataframe['cloud_green'] = ichimoku['cloud_green'].fillna(0)
         dataframe['cloud_red'] = ichimoku['cloud_red'].fillna(0)
-
-        # Calculate ATR (KEEPING THE ORIGINAL)
         dataframe['atr'] = ta.ATR(dataframe)
-
         return dataframe
 
+    # ------------- Inverted Trading Logic -------------
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        conditions = []
-
-        # Use FreqAI prediction as primary signal (when available)
-        freqai_conditions = [
-            dataframe['do_predict'] == 1,
-            dataframe['&-target'] > 0.001  # Predict positive price movement (0.1%)
-        ]
-
-        # KEEP ALL ORIGINAL CONDITIONS
-        # Trending market
-        if self.buy_params['buy_trend_above_senkou_level'] >= 1:
-            conditions.append(dataframe['trend_close_5m'] > dataframe['senkou_a'])
-            conditions.append(dataframe['trend_close_5m'] > dataframe['senkou_b'])
-
-        if self.buy_params['buy_trend_above_senkou_level'] >= 2:
-            conditions.append(dataframe['trend_close_15m'] > dataframe['senkou_a'])
-            conditions.append(dataframe['trend_close_15m'] > dataframe['senkou_b'])
-
-        if self.buy_params['buy_trend_above_senkou_level'] >= 3:
-            conditions.append(dataframe['trend_close_30m'] > dataframe['senkou_a'])
-            conditions.append(dataframe['trend_close_30m'] > dataframe['senkou_b'])
-
-        if self.buy_params['buy_trend_above_senkou_level'] >= 4:
-            conditions.append(dataframe['trend_close_1h'] > dataframe['senkou_a'])
-            conditions.append(dataframe['trend_close_1h'] > dataframe['senkou_b'])
-
-        if self.buy_params['buy_trend_above_senkou_level'] >= 5:
-            conditions.append(dataframe['trend_close_2h'] > dataframe['senkou_a'])
-            conditions.append(dataframe['trend_close_2h'] > dataframe['senkou_b'])
-
-        if self.buy_params['buy_trend_above_senkou_level'] >= 6:
-            conditions.append(dataframe['trend_close_4h'] > dataframe['senkou_a'])
-            conditions.append(dataframe['trend_close_4h'] > dataframe['senkou_b'])
-
-        if self.buy_params['buy_trend_above_senkou_level'] >= 7:
-            conditions.append(dataframe['trend_close_6h'] > dataframe['senkou_a'])
-            conditions.append(dataframe['trend_close_6h'] > dataframe['senkou_b'])
-
-        if self.buy_params['buy_trend_above_senkou_level'] >= 8:
-            conditions.append(dataframe['trend_close_8h'] > dataframe['senkou_a'])
-            conditions.append(dataframe['trend_close_8h'] > dataframe['senkou_b'])
-
-        # Trends bullish
-        if self.buy_params['buy_trend_bullish_level'] >= 1:
-            conditions.append(dataframe['trend_close_5m'] > dataframe['trend_open_5m'])
-
-        if self.buy_params['buy_trend_bullish_level'] >= 2:
-            conditions.append(dataframe['trend_close_15m'] > dataframe['trend_open_15m'])
-
-        if self.buy_params['buy_trend_bullish_level'] >= 3:
-            conditions.append(dataframe['trend_close_30m'] > dataframe['trend_open_30m'])
-
-        if self.buy_params['buy_trend_bullish_level'] >= 4:
-            conditions.append(dataframe['trend_close_1h'] > dataframe['trend_open_1h'])
-
-        if self.buy_params['buy_trend_bullish_level'] >= 5:
-            conditions.append(dataframe['trend_close_2h'] > dataframe['trend_open_2h'])
-
-        if self.buy_params['buy_trend_bullish_level'] >= 6:
-            conditions.append(dataframe['trend_close_4h'] > dataframe['trend_open_4h'])
-
-        if self.buy_params['buy_trend_bullish_level'] >= 7:
-            conditions.append(dataframe['trend_close_6h'] > dataframe['trend_open_6h'])
-
-        if self.buy_params['buy_trend_bullish_level'] >= 8:
-            conditions.append(dataframe['trend_close_8h'] > dataframe['trend_open_8h'])
-
-        # Trends magnitude (KEEPING THE ORIGINAL)
-        conditions.append(dataframe['fan_magnitude_gain'] >= self.buy_params['buy_min_fan_magnitude_gain'])
-        conditions.append(dataframe['fan_magnitude'] > 1)
-
-        for x in range(self.buy_params['buy_fan_magnitude_shift_value']):
-            conditions.append(dataframe['fan_magnitude'].shift(x+1) < dataframe['fan_magnitude'])
-
-        # Combine FreqAI with original conditions
-        if conditions:
-            # Use FreqAI when available, otherwise fall back to original logic
-            dataframe.loc[
-                (reduce(lambda x, y: x & y, freqai_conditions) & reduce(lambda x, y: x & y, conditions)) |
-                (reduce(lambda x, y: x & y, conditions) & (dataframe['do_predict'] != 1)),
-                'enter_long'] = 1
-
+        # Inverted: Buy when the old sell condition would trigger
+        freqai_exit = (dataframe['do_predict'] == 1) & (dataframe['&-target'] < -0.001)
+        original_exit = qtpylib.crossed_below(dataframe['trend_close_5m'], dataframe[self.sell_params['sell_trend_indicator']])
+        dataframe.loc[freqai_exit | original_exit, 'enter_long'] = 1
         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        # Inverted: Sell when the old buy condition would trigger
+        freqai_conditions = [
+            dataframe['do_predict'] == 1,
+            dataframe['&-target'] > 0.001
+        ]
         conditions = []
 
-        # Use FreqAI prediction when available
-        freqai_exit = (dataframe['do_predict'] == 1) & (dataframe['&-target'] < -0.001)  # Predict negative movement
+        if self.buy_params['buy_trend_above_senkou_level'] >= 1:
+            conditions.append(dataframe['trend_close_5m'] > dataframe['senkou_a'])
+            conditions.append(dataframe['trend_close_5m'] > dataframe['senkou_b'])
+        if self.buy_params['buy_trend_above_senkou_level'] >= 6:
+            conditions.append(dataframe['trend_close_4h'] > dataframe['senkou_a'])
+            conditions.append(dataframe['trend_close_4h'] > dataframe['senkou_b'])
+        if self.buy_params['buy_trend_bullish_level'] >= 6:
+            conditions.append(dataframe['trend_close_4h'] > dataframe['trend_open_4h'])
 
-        # Keep original exit condition
-        original_exit = qtpylib.crossed_below(dataframe['trend_close_5m'], dataframe[self.sell_params['sell_trend_indicator']])
+        conditions.append(dataframe['fan_magnitude_gain'] >= self.buy_params['buy_min_fan_magnitude_gain'])
+        conditions.append(dataframe['fan_magnitude'] > 1)
+        for x in range(self.buy_params['buy_fan_magnitude_shift_value']):
+            conditions.append(dataframe['fan_magnitude'].shift(x+1) < dataframe['fan_magnitude'])
 
-        # Combine both conditions
-        dataframe.loc[freqai_exit | original_exit, 'exit_long'] = 1
-
+        dataframe.loc[
+            (reduce(lambda x, y: x & y, freqai_conditions) & reduce(lambda x, y: x & y, conditions)) |
+            (reduce(lambda x, y: x & y, conditions) & (dataframe['do_predict'] != 1)),
+            'exit_long'
+        ] = 1
         return dataframe

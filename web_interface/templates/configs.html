@@ -1,0 +1,1054 @@
+{% extends "base.html" %}
+
+{% block title %}Configurations - FreqTrade Manager{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12"></div>
+</div>
+
+<!-- Configurations List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> Configuration Files</h5>
+                </div>
+                <div class="btn-group btn-group-sm ms-auto">
+                    <button type="button" class="btn btn-outline-primary pairlist-action-btn" onclick="reloadConfigs(); this.blur();" title="Reload Configs">
+                        <i class="fas fa-sync"></i> Reload Configs
+                    </button>
+                    <button type="button" class="btn btn-outline-success pairlist-action-btn" data-bs-toggle="modal" data-bs-target="#viewEditConfigModal" onclick="createConfig()" title="Create New Config">
+                        <i class="fas fa-plus"></i> Create New
+                    </button>
+                    <button type="button" class="btn btn-outline-warning pairlist-action-btn" data-bs-toggle="modal" data-bs-target="#uploadConfigModal" title="Upload Config">
+                        <i class="fas fa-upload"></i> Upload New
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Category Filter Bar (like pairlists) -->
+                <div class="row mb-3">
+                    <div class="col-md-8 col-sm-12">
+                        <div id="configCategoryFilterGroup" class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-secondary config-category-filter-btn active" data-category="all">All</button>
+                            <button type="button" class="btn btn-success config-category-filter-btn" data-category="full">Full</button>
+                            <button type="button" class="btn btn-info text-white config-category-filter-btn" data-category="freqai">Freqai</button>
+                            <button type="button" class="btn btn-warning config-category-filter-btn" data-category="test">Test</button>
+                            <button type="button" class="btn btn-primary config-category-filter-btn" data-category="popular">Popular</button>
+                            <button type="button" class="btn btn-secondary config-category-filter-btn" data-category="custom">Custom</button>
+                        </div>
+                    </div>
+                </div>
+                {% if configs %}
+                                <!-- Responsive Table (desktop) -->
+                                <div class="responsive-table-wrapper">
+                                    <div class="table-responsive config-table-responsive">
+                                        <table class="table table-striped table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Name</th>
+                                                    <th>Category</th>
+                                                    <th>Strategy</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="configsTableBody">
+                                                {% for config in configs %}
+                                                <tr data-category="{{ config.category|default('custom')|lower }}">
+                                                    <td>{{ config.name }}</td>
+                                                    <td><span class="badge bg-{{ 'warning' if config.category == 'test' else 'info' if config.category == 'freqai' else 'success' if config.category == 'full' else 'secondary' }}">{{ config.category|title|default('Custom') }}</span></td>
+                                                    <td>{{ config.strategy|default('-') }}</td>
+                                                    <td>
+                                                        <div class="btn-group btn-group-sm">
+                                                            <button class="btn btn-outline-primary border-dark" onclick="viewEditConfig('{{ config.filename }}')" title="View/Edit">
+                                                                <i class="fas fa-eye"></i>
+                                                            </button>
+                                                            <button class="btn btn-outline-success border-dark" title="Clone" onclick="cloneConfig('{{ config.filename }}')"><i class="fas fa-clone"></i></button>
+                                                            <button class="btn btn-outline-info border-dark" onclick="downloadConfig('{{ config.filename }}')" title="Download">
+                                                                <i class="fas fa-download"></i>
+                                                            </button>
+                                                            <button class="btn btn-outline-danger border-dark" onclick="deleteConfig('{{ config.filename }}')" title="Delete">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <!-- Responsive Card List (mobile/tablet) -->
+                                <div class="responsive-card-list">
+                                    {% for config in configs %}
+                                    <div class="card mb-3 pairlist-card config-card" data-category="{{ config.category|default('custom')|lower }}">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div>
+                                                    <h6 class="card-title mb-1">{{ config.name }}</h6>
+                                                    <small class="text-muted">{{ config.filename }}</small>
+                                                </div>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                        <i class="fas fa-ellipsis-v"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        <li><a class="dropdown-item text-info" href="#" onclick="downloadConfig('{{ config.filename }}')">
+                                                            <i class="fas fa-download"></i> Download
+                                                        </a></li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li><a class="dropdown-item text-danger" href="#" onclick="deleteConfig('{{ config.filename }}')">
+                                                            <i class="fas fa-trash"></i> Delete
+                                                        </a></li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                            <div class="row g-2 mb-3">
+                                                <div class="col-6">
+                                                    <small class="text-muted d-block">Category</small>
+                                                    <span class="badge bg-{{ 'warning' if config.category == 'test' else 'info' if config.category == 'freqai' else 'success' if config.category == 'full' else 'secondary' }}">{{ config.category|title|default('Custom') }}</span>
+                                                </div>
+                                                <div class="col-6">
+                                                    <small class="text-muted d-block">Pairs</small>
+                                                    <div style="max-height: 48px; overflow-y: auto;">
+                                                        {% if config.exchange and config.exchange.pair_whitelist and config.exchange.pair_whitelist|length > 0 %}
+                                                            {% for pair in config.exchange.pair_whitelist %}
+                                                                <span class="badge bg-primary mb-1">{{ pair }}</span>
+                                                            {% endfor %}
+                                                        {% else %}
+                                                            <span class="text-muted">-</span>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="row g-2 mb-1">
+                                                <div class="col-6">
+                                                    <small class="text-muted d-block">Strategy</small>
+                                                    <span>{{ config.strategy|default('-') }}</span>
+                                                </div>
+                                                <div class="col-6">
+                                                    <small class="text-muted d-block">Filename</small>
+                                                    <span><code>{{ config.filename }}</code></span>
+                                                </div>
+                                            </div>
+                                            <div class="d-grid gap-2 d-md-flex mt-2">
+                                                <button class="btn btn-primary btn-sm flex-fill border-dark" onclick="viewEditConfig('{{ config.filename }}')">
+                                                    <i class="fas fa-eye"></i> View/Edit
+                                                </button>
+                                                <button class="btn btn-outline-success btn-sm flex-fill border-dark" title="Clone" onclick="cloneConfig('{{ config.filename }}')"><i class="fas fa-clone"></i> Clone</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-circle fa-3x text-muted mb-3"></i>
+                    <h5>No configuration files found</h5>
+                    <p class="text-muted">Create your first configuration to get started</p>
+                    <button class="btn btn-primary" onclick="createConfig()">
+                        <i class="fas fa-plus"></i> Create Configuration
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<!-- Unified View/Edit/Create/Clone/Upload Config Modal -->
+<div class="modal fade" id="viewEditConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewEditConfigTitle">Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2" id="mainConfigNameRow">
+                    <label for="viewEditConfigName" class="form-label">Configuration Name</label>
+                    <input type="text" class="form-control" id="viewEditConfigName" readonly>
+                </div>
+                <div class="mb-3" id="mainConfigCategoryRow">
+                    <label class="form-label">Category</label>
+                    <div id="configCategoryGroup" class="btn-group btn-group-sm w-100 mt-2" role="group">
+                        <button type="button" class="btn btn-success category-select-btn w-20" data-value="full">Full</button>
+                        <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">Freqai</button>
+                        <button type="button" class="btn btn-warning category-select-btn w-20" data-value="test">Test</button>
+                        <button type="button" class="btn btn-primary category-select-btn w-20" data-value="popular">Popular</button>
+                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="custom">Custom</button>
+                    </div>
+                    <input type="hidden" id="configCategory" value="custom" required>
+                </div>
+                <!-- Mode toggle removed: only present in create modal if needed -->
+                <ul class="nav nav-tabs mb-3" id="configEditTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="visual-config-tab" data-bs-toggle="tab" data-bs-target="#visual-config-content" type="button" role="tab">Visual</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="json-config-tab" data-bs-toggle="tab" data-bs-target="#json-config-content" type="button" role="tab">JSON</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="configEditTabContent">
+                    <div class="tab-pane fade show active" id="visual-config-content" role="tabpanel">
+                        <form id="visualConfigForm">
+                            <div id="visualConfigFields"></div>
+                        </form>
+                    </div>
+                    <div class="tab-pane fade" id="json-config-content" role="tabpanel">
+                        <textarea class="form-control bg-dark text-light" id="viewEditConfigData" rows="16" style="font-family: monospace; white-space: pre;" readonly></textarea>
+                        <div id="configJsonValidationMsg" class="text-danger small mt-1" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="editConfigBtn" onclick="enableConfigEditing()">Edit</button>
+                <button type="button" class="btn btn-success d-none" id="saveConfigBtn" onclick="saveConfig()">Save</button>
+                <button type="button" class="btn btn-danger d-none" id="cancelEditConfigBtn" onclick="cancelEditConfig()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Config Modal (dedicated) -->
+<div class="modal fade" id="uploadConfigModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label">Category</label>
+                <div id="uploadConfigCategoryGroup" class="btn-group btn-group-sm w-100 mt-2" role="group">
+                    <button type="button" class="btn btn-success category-select-btn w-20" data-value="full">Full</button>
+                    <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">Freqai</button>
+                    <button type="button" class="btn btn-warning category-select-btn w-20" data-value="test">Test</button>
+                    <button type="button" class="btn btn-primary category-select-btn w-20" data-value="popular">Popular</button>
+                    <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="custom">Custom</button>
+                </div>
+                <input type="hidden" id="uploadConfigCategory" value="custom" required>
+                <label for="uploadConfigFile" class="form-label mt-2">Select Config File</label>
+                <input class="form-control" type="file" id="uploadConfigFile" accept=".json,.conf,.yaml,.yml">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="uploadConfigBtn" onclick="submitUploadConfig()">
+                    <i class="fas fa-upload"></i> Upload
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clone Config Modal (dedicated) -->
+<div class="modal fade" id="cloneConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Clone Configuration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label for="cloneConfigName" class="form-label">Configuration Name</label>
+                    <input type="text" class="form-control" id="cloneConfigName">
+                </div>
+                <div class="mb-3">
+                    <label for="cloneConfigContent" class="form-label">Config Content (JSON)</label>
+                    <textarea class="form-control bg-dark text-light" id="cloneConfigContent" rows="16" style="font-family: monospace; white-space: pre;"></textarea>
+                    <div id="cloneConfigJsonValidationMsg" class="text-danger small mt-1" style="display:none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveCloneConfigBtn" onclick="saveCloneConfig()">Clone</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.pairlist-action-btn {
+    border: 1.5px solid #fff !important;
+    color: #fff !important;
+    background: transparent !important;
+    transition: background 0.2s, color 0.2s, border 0.2s;
+}
+.pairlist-action-btn.btn-outline-primary {
+    border-color: #fff !important;
+    color: #fff !important;
+    background: transparent !important;
+}
+.pairlist-action-btn.btn-outline-primary:hover,
+.pairlist-action-btn.btn-outline-primary:focus {
+    background-color: #0d6efd !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+.pairlist-action-btn.btn-outline-success {
+    border-color: #fff !important;
+    color: #fff !important;
+    background: transparent !important;
+}
+.pairlist-action-btn.btn-outline-success:hover,
+.pairlist-action-btn.btn-outline-success:focus {
+    background-color: #198754 !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+.pairlist-action-btn.btn-outline-warning {
+    border-color: #fff !important;
+    color: #fff !important;
+    background: transparent !important;
+}
+.pairlist-action-btn.btn-outline-warning:hover,
+.pairlist-action-btn.btn-outline-warning:focus {
+    background-color: #ffc107 !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+.pairlist-action-btn.btn-outline-secondary {
+    border-color: #fff !important;
+    color: #fff !important;
+    background: transparent !important;
+}
+.pairlist-action-btn.btn-outline-secondary:hover,
+.pairlist-action-btn.btn-outline-secondary:focus {
+    background-color: #6c757d !important;
+    color: #fff !important;
+    border-color: #fff !important;
+}
+</style>
+
+<style>
+/* Responsive switch for configs (like pairlists) */
+@media (max-width: 1200px) {
+    .responsive-table-wrapper { display: none !important; }
+    .responsive-card-list { display: block !important; }
+}
+@media (min-width: 1201px) {
+    .responsive-table-wrapper { display: block !important; }
+    .responsive-card-list { display: none !important; }
+}
+</style>
+<script>
+// Config category filter logic for table and card views (mirrors pairlists)
+document.addEventListener('DOMContentLoaded', function() {
+    function setupConfigCategoryFilter(groupId) {
+        const group = document.getElementById(groupId);
+        if (!group) return;
+        group.addEventListener('click', function(e) {
+            if (e.target.classList.contains('config-category-filter-btn')) {
+                document.querySelectorAll('.config-category-filter-btn').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                const value = e.target.getAttribute('data-category');
+                // Table rows
+                const rows = document.querySelectorAll('#configsTableBody tr');
+                rows.forEach(row => {
+                    if (value === 'all' || row.getAttribute('data-category') === value) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+                // Card view
+                const cards = document.querySelectorAll('.config-card');
+                cards.forEach(card => {
+                    if (value === 'all' || card.getAttribute('data-category') === value) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            }
+        });
+    }
+    setupConfigCategoryFilter('configCategoryFilterGroup');
+});
+</script>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+// --- Download Config Logic (unchanged) ---
+function downloadConfig(filename) {
+    if (!filename) return;
+    fetch(`/api/config/download/${filename}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to download config.');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            if (typeof showNotification === 'function') {
+                showNotification(`Config "${filename}" downloaded.`, 'success');
+            }
+        })
+        .catch(() => {
+            if (typeof showNotification === 'function') {
+                showNotification('Failed to download config.', 'danger');
+            } else {
+                alert('Failed to download config.');
+            }
+        });
+}
+
+// --- Category select logic for create and upload modal (mirrors pairlists) ---
+document.addEventListener('DOMContentLoaded', function() {
+    function setupCategorySelect(groupId, inputId) {
+        const group = document.getElementById(groupId);
+        const input = document.getElementById(inputId);
+        if (group && input) {
+            group.querySelectorAll('.category-select-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    input.value = btn.getAttribute('data-value');
+                });
+            });
+        }
+    }
+    setupCategorySelect('configCategoryGroup', 'configCategory');
+    setupCategorySelect('uploadConfigCategoryGroup', 'uploadConfigCategory');
+});
+
+// --- Config category filter logic for table and card views (mirrors pairlists) ---
+document.addEventListener('DOMContentLoaded', function() {
+    function setupConfigCategoryFilter(groupId) {
+        const group = document.getElementById(groupId);
+        if (!group) return;
+        group.addEventListener('click', function(e) {
+            if (e.target.classList.contains('config-category-filter-btn')) {
+                document.querySelectorAll('.config-category-filter-btn').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                const value = e.target.getAttribute('data-category');
+                // Table rows
+                const rows = document.querySelectorAll('#configsTableBody tr');
+                rows.forEach(row => {
+                    if (value === 'all' || row.getAttribute('data-category') === value) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+                // Card view
+                const cards = document.querySelectorAll('.config-card');
+                cards.forEach(card => {
+                    if (value === 'all' || card.getAttribute('data-category') === value) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            }
+        });
+    }
+    setupConfigCategoryFilter('configCategoryFilterGroup');
+});
+
+// --- Modal Reset, Duplicate Filename Check, and Edit/Create Logic (mirrors pairlists) ---
+let existingConfigFilenames = [];
+let currentConfigFile = null;
+let originalConfigContent = '';
+let editConfigMode = false;
+
+function renderVisualConfigFields(jsonObj, readOnly = true, parentKey = '', level = 0) {
+    // Recursively render all fields, grouping under parents, with collapsible sections for objects/arrays
+    const container = parentKey ? document.createElement('div') : document.getElementById('visualConfigFields');
+    if (!jsonObj || typeof jsonObj !== 'object') return;
+    Object.keys(jsonObj).forEach(key => {
+        const value = jsonObj[key];
+        let row = document.createElement('div');
+        row.className = 'mb-2';
+        row.style.marginLeft = (level * 18) + 'px';
+        let label = document.createElement('label');
+        label.className = 'form-label fw-bold';
+        label.textContent = key + ' ';
+        let typeHint = document.createElement('span');
+        typeHint.className = 'badge bg-secondary ms-1';
+        if (typeof value === 'string') typeHint.textContent = 'string';
+        else if (typeof value === 'number') typeHint.textContent = 'number';
+        else if (typeof value === 'boolean') typeHint.textContent = 'bool';
+        else if (Array.isArray(value)) typeHint.textContent = 'array';
+        else if (typeof value === 'object' && value !== null) typeHint.textContent = 'object';
+        else typeHint.textContent = typeof value;
+        label.appendChild(typeHint);
+        row.appendChild(label);
+        if (typeof value === 'object' && value !== null) {
+            // Collapsible Bootstrap card for objects/arrays with darker contrast
+            const collapseId = 'collapse_' + (parentKey ? parentKey + '_' : '') + key;
+            let card = document.createElement('div');
+            card.className = 'card mb-2 border-primary shadow-sm';
+            card.style.background = level % 2 === 0 ? '#e2e6ea' : '#cfd4da';
+            let cardHeader = document.createElement('div');
+            cardHeader.className = 'card-header py-1 px-2 d-flex align-items-center';
+            cardHeader.style.background = level % 2 === 0 ? '#c7cfe2' : '#b0b8c9';
+            let collapseBtn = document.createElement('button');
+            collapseBtn.type = 'button';
+            collapseBtn.className = 'btn btn-link btn-sm p-0 me-2';
+            collapseBtn.setAttribute('data-bs-toggle', 'collapse');
+            collapseBtn.setAttribute('data-bs-target', '#' + collapseId);
+            collapseBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+            cardHeader.appendChild(collapseBtn);
+            let headerLabel = document.createElement('span');
+            headerLabel.className = 'fw-bold';
+            headerLabel.textContent = key + (Array.isArray(value) ? ' [array]' : ' [object]');
+            cardHeader.appendChild(headerLabel);
+            card.appendChild(cardHeader);
+            let collapseDiv = document.createElement('div');
+            collapseDiv.className = 'collapse show';
+            collapseDiv.id = collapseId;
+            let cardBody = document.createElement('div');
+            cardBody.className = 'card-body py-2 px-2';
+            if (Array.isArray(value)) {
+                value.forEach((item, idx) => {
+                    let arrLabel = document.createElement('div');
+                    arrLabel.className = 'fw-bold text-muted small';
+                    arrLabel.textContent = `[${idx}]`;
+                    cardBody.appendChild(arrLabel);
+                    if (typeof item === 'object' && item !== null) {
+                        cardBody.appendChild(renderVisualConfigFields(item, readOnly, collapseId + '_' + idx, level + 1));
+                    } else {
+                        let arrInput = document.createElement('input');
+                        arrInput.type = 'text';
+                        arrInput.className = 'form-control mb-2';
+                        arrInput.value = item;
+                        arrInput.readOnly = readOnly;
+                        arrInput.disabled = readOnly;
+                        cardBody.appendChild(arrInput);
+                    }
+                });
+            } else {
+                cardBody.appendChild(renderVisualConfigFields(value, readOnly, collapseId, level + 1));
+            }
+            collapseDiv.appendChild(cardBody);
+            card.appendChild(collapseDiv);
+            row.appendChild(card);
+        } else {
+            // Primitive
+            let input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+            input.value = value;
+            input.readOnly = readOnly;
+            input.disabled = readOnly;
+            input.id = 'visualConfig_' + (parentKey ? parentKey + '_' : '') + key;
+            row.appendChild(input);
+        }
+        container.appendChild(row);
+    });
+    if (parentKey) return container;
+}
+
+function resetConfigModal(mode = 'view', filename = '', content = '{}', category = 'custom') {
+    // mode: 'view', 'edit', 'create', 'clone'
+    currentConfigFile = filename;
+    originalConfigContent = content;
+    editConfigMode = (mode === 'edit' || mode === 'create' || mode === 'clone');
+    document.getElementById('viewEditConfigTitle').textContent =
+        mode === 'create' ? 'Create Configuration' :
+        mode === 'clone' ? 'Clone Configuration' :
+        'Configuration';
+    document.getElementById('viewEditConfigName').value = filename;
+    document.getElementById('viewEditConfigName').readOnly = (mode !== 'create' && mode !== 'clone') ? true : false;
+    document.getElementById('configCategory').value = category;
+    // Set active category button
+    const group = document.getElementById('configCategoryGroup');
+    if (group) {
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-value') === category);
+        });
+    }
+    // Set JSON content
+    document.getElementById('viewEditConfigData').value = content;
+    document.getElementById('viewEditConfigData').readOnly = !editConfigMode;
+    // Visual tab: parse JSON and render fields
+    let jsonObj = {};
+    try { jsonObj = JSON.parse(content); } catch {}
+    renderVisualConfigFields(jsonObj, !editConfigMode);
+    // Hide/show buttons
+    document.getElementById('editConfigBtn').classList.toggle('d-none', editConfigMode);
+    document.getElementById('saveConfigBtn').classList.toggle('d-none', !editConfigMode);
+    document.getElementById('cancelEditConfigBtn').classList.toggle('d-none', !editConfigMode);
+    // Hide validation message
+    document.getElementById('configJsonValidationMsg').style.display = 'none';
+}
+
+// Sync visual fields when switching to visual tab
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('visual-config-tab').addEventListener('shown.bs.tab', function() {
+        let jsonObj = {};
+        try { jsonObj = JSON.parse(document.getElementById('viewEditConfigData').value); } catch {}
+        renderVisualConfigFields(jsonObj, !editConfigMode);
+    });
+    document.getElementById('json-config-tab').addEventListener('shown.bs.tab', function() {
+        // Optionally, update JSON from visual fields if in edit mode
+        if (editConfigMode) {
+            let jsonObj = {};
+            try { jsonObj = JSON.parse(document.getElementById('viewEditConfigData').value); } catch {}
+            // Update from visual fields
+            ['strategy', 'timeframe', 'exchange', 'pairlist'].forEach(key => {
+                const input = document.getElementById('visualConfig_' + key);
+                if (input) {
+                    if (key === 'pairlist') {
+                        jsonObj[key] = input.value.split(',').map(s => s.trim()).filter(Boolean);
+                    } else {
+                        jsonObj[key] = input.value;
+                    }
+                }
+            });
+            document.getElementById('viewEditConfigData').value = JSON.stringify(jsonObj, null, 2);
+        }
+    });
+});
+
+// Duplicate filename check for create/clone
+function checkDuplicateConfigName() {
+    const name = document.getElementById('viewEditConfigName').value.trim().toLowerCase();
+    const saveBtn = document.getElementById('saveConfigBtn');
+    const isDuplicate = existingConfigFilenames.includes(name);
+    if (isDuplicate) {
+        saveBtn.disabled = true;
+        document.getElementById('configJsonValidationMsg').textContent = 'Duplicate config filename!';
+        document.getElementById('configJsonValidationMsg').style.display = 'block';
+    } else {
+        saveBtn.disabled = false;
+        document.getElementById('configJsonValidationMsg').style.display = 'none';
+    }
+}
+
+// Modal open logic for create
+function createConfig() {
+    fetch('/api/configs')
+        .then(r => r.json())
+        .then(data => {
+            existingConfigFilenames = (data.configs || []).map(c => c.name.toLowerCase());
+            resetConfigModal('create', '', '{\n  "setting": "value"\n}', 'custom');
+            document.getElementById('viewEditConfigName').value = '';
+            document.getElementById('saveConfigBtn').disabled = false;
+            document.getElementById('viewEditConfigName').addEventListener('input', checkDuplicateConfigName);
+            new bootstrap.Modal(document.getElementById('viewEditConfigModal')).show();
+        });
+}
+
+// Modal open logic for view/edit
+function viewEditConfig(filename) {
+    fetch(`/api/config/${filename}`)
+        .then(r => r.json())
+        .then(data => {
+            resetConfigModal('view', filename, JSON.stringify(data, null, 2), data.category || 'custom');
+            new bootstrap.Modal(document.getElementById('viewEditConfigModal')).show();
+        });
+}
+
+// Enable editing
+function enableConfigEditing() {
+    editConfigMode = true;
+    document.getElementById('viewEditConfigData').readOnly = false;
+    document.getElementById('editConfigBtn').classList.add('d-none');
+    document.getElementById('saveConfigBtn').classList.remove('d-none');
+    document.getElementById('cancelEditConfigBtn').classList.remove('d-none');
+}
+
+// Cancel editing
+function cancelEditConfig() {
+    editConfigMode = false;
+    document.getElementById('viewEditConfigData').value = originalConfigContent;
+    document.getElementById('viewEditConfigData').readOnly = true;
+    document.getElementById('editConfigBtn').classList.remove('d-none');
+    document.getElementById('saveConfigBtn').classList.add('d-none');
+    document.getElementById('cancelEditConfigBtn').classList.add('d-none');
+    document.getElementById('configJsonValidationMsg').style.display = 'none';
+}
+
+// Save config edits or create new config
+function saveConfig() {
+    let name = document.getElementById('viewEditConfigName').value.trim();
+    let content = document.getElementById('viewEditConfigData').value;
+    let category = document.getElementById('configCategory').value;
+    if (!name.endsWith('.json')) {
+        document.getElementById('configJsonValidationMsg').textContent = 'Config filename must end with .json';
+        document.getElementById('configJsonValidationMsg').style.display = 'block';
+        return;
+    }
+    try {
+        JSON.parse(content);
+    } catch (e) {
+        document.getElementById('configJsonValidationMsg').textContent = 'Invalid JSON: ' + e.message;
+        document.getElementById('configJsonValidationMsg').style.display = 'block';
+        return;
+    }
+    fetch(`/api/config/${name}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: content
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            document.getElementById('configJsonValidationMsg').textContent = data.error || 'Failed to save config.';
+            document.getElementById('configJsonValidationMsg').style.display = 'block';
+        }
+    })
+    .catch(() => {
+        document.getElementById('configJsonValidationMsg').textContent = 'Failed to save config.';
+        document.getElementById('configJsonValidationMsg').style.display = 'block';
+    });
+}
+
+// Upload config logic (mirrors pairlists)
+function submitUploadConfig() {
+    const fileInput = document.getElementById('uploadConfigFile');
+    const category = document.getElementById('uploadConfigCategory').value;
+    if (!fileInput.files.length) {
+        alert('Please select a file to upload.');
+        return;
+    }
+    const file = fileInput.files[0];
+    if (!file.name.endsWith('.json')) {
+        alert('Only .json files are allowed.');
+        fileInput.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const content = e.target.result;
+            JSON.parse(content); // Validate JSON
+            fetch(`/api/config/${file.name}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: content
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert(data.error || 'Failed to upload config.');
+                }
+            })
+            .catch(() => alert('Failed to upload config.'));
+        } catch (err) {
+            alert('Invalid JSON in config file.');
+        }
+    };
+    reader.readAsText(file);
+}
+
+// --- Clone Config Logic (mirrors pairlists copyPairlist) ---
+function cloneConfig(filename) {
+    document.getElementById('cloneConfigName').value = filename.replace('.json', '_copy.json');
+    document.getElementById('cloneConfigContent').value = 'Loading...';
+    fetch(`/api/config/${filename}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data) {
+                document.getElementById('cloneConfigContent').value = JSON.stringify(data, null, 2);
+            } else {
+                document.getElementById('cloneConfigContent').value = 'Failed to load config for cloning.';
+            }
+        })
+        .catch(() => {
+            document.getElementById('cloneConfigContent').value = 'Failed to load config for cloning.';
+        });
+    new bootstrap.Modal(document.getElementById('cloneConfigModal')).show();
+}
+
+// Save clone config
+function saveCloneConfig() {
+    let name = document.getElementById('cloneConfigName').value.trim();
+    let content = document.getElementById('cloneConfigContent').value;
+    if (!name.endsWith('.json')) {
+        document.getElementById('cloneConfigJsonValidationMsg').textContent = 'Config filename must end with .json';
+        document.getElementById('cloneConfigJsonValidationMsg').style.display = 'block';
+        return;
+    }
+    try {
+        JSON.parse(content);
+    } catch (e) {
+        document.getElementById('cloneConfigJsonValidationMsg').textContent = 'Invalid JSON: ' + e.message;
+        document.getElementById('cloneConfigJsonValidationMsg').style.display = 'block';
+        return;
+    }
+    fetch(`/api/config/${name}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: content
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            document.getElementById('cloneConfigJsonValidationMsg').textContent = data.error || 'Failed to save config.';
+            document.getElementById('cloneConfigJsonValidationMsg').style.display = 'block';
+        }
+    })
+    .catch(() => {
+        document.getElementById('cloneConfigJsonValidationMsg').textContent = 'Failed to save config.';
+        document.getElementById('cloneConfigJsonValidationMsg').style.display = 'block';
+    });
+}
+
+// --- Easy/Expert Toggle and Template Logic ---
+const configTemplates = {
+    easy: {
+        name: "Easy Template",
+        json: `{
+  "strategy": "SampleStrategy",
+  "exchange": {
+    "name": "binance",
+    "pair_whitelist": ["BTC/USDT"]
+  },
+  "timeframe": "1h"
+}`
+    },
+    expert: {
+        name: "Expert Template",
+        json: `{
+  "strategy": "SampleStrategy",
+  "exchange": {
+    "name": "binance",
+    "key": "YOUR_KEY",
+    "secret": "YOUR_SECRET",
+    "pair_whitelist": ["BTC/USDT", "ETH/USDT"],
+    "pair_blacklist": []
+  },
+  "timeframe": "1h",
+  "max_open_trades": 5,
+  "stake_amount": 100,
+  "dry_run": true
+}`
+    }
+};
+
+let visualMode = 'easy';
+let jsonMode = 'easy';
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Add Easy/Expert toggle to Visual tab
+    const visualTab = document.getElementById('visual-config-content');
+    if (visualTab) {
+        const toggle = document.createElement('div');
+        toggle.className = 'btn-group mb-2';
+        toggle.innerHTML = `
+            <button type="button" class="btn btn-outline-primary btn-sm" id="visualEasyBtn">Easy</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="visualExpertBtn">Expert</button>
+        `;
+        visualTab.prepend(toggle);
+        document.getElementById('visualEasyBtn').onclick = function() {
+            visualMode = 'easy';
+            this.classList.add('btn-primary');
+            this.classList.remove('btn-secondary');
+            document.getElementById('visualExpertBtn').classList.remove('btn-primary');
+            document.getElementById('visualExpertBtn').classList.add('btn-secondary');
+            renderVisualConfigFields(currentVisualConfig, true, '', 0, 'easy');
+            updateJsonFromVisual('easy');
+        };
+        document.getElementById('visualExpertBtn').onclick = function() {
+            visualMode = 'expert';
+            this.classList.add('btn-primary');
+            this.classList.remove('btn-secondary');
+            document.getElementById('visualEasyBtn').classList.remove('btn-primary');
+            document.getElementById('visualEasyBtn').classList.add('btn-secondary');
+            renderVisualConfigFields(currentVisualConfig, true, '', 0, 'expert');
+            updateJsonFromVisual('expert');
+        };
+    }
+    // Add Easy/Expert toggle and template dropdown to JSON tab
+    const jsonTab = document.getElementById('json-config-content');
+    if (jsonTab) {
+        const toggle = document.createElement('div');
+        toggle.className = 'btn-group mb-2';
+        toggle.innerHTML = `
+            <button type="button" class="btn btn-outline-primary btn-sm" id="jsonEasyBtn">Easy</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="jsonExpertBtn">Expert</button>
+            <select id="jsonTemplateSelect" class="form-select form-select-sm ms-2" style="width:auto;display:inline-block;">
+                <option value="easy">Easy Template</option>
+                <option value="expert">Expert Template</option>
+            </select>
+        `;
+        jsonTab.prepend(toggle);
+        document.getElementById('jsonEasyBtn').onclick = function() {
+            jsonMode = 'easy';
+            this.classList.add('btn-primary');
+            this.classList.remove('btn-secondary');
+            document.getElementById('jsonExpertBtn').classList.remove('btn-primary');
+            document.getElementById('jsonExpertBtn').classList.add('btn-secondary');
+            document.getElementById('jsonTemplateSelect').value = 'easy';
+            document.getElementById('viewEditConfigData').value = configTemplates.easy.json;
+        };
+        document.getElementById('jsonExpertBtn').onclick = function() {
+            jsonMode = 'expert';
+            this.classList.add('btn-primary');
+            this.classList.remove('btn-secondary');
+            document.getElementById('jsonEasyBtn').classList.remove('btn-primary');
+            document.getElementById('jsonEasyBtn').classList.add('btn-secondary');
+            document.getElementById('jsonTemplateSelect').value = 'expert';
+            document.getElementById('viewEditConfigData').value = configTemplates.expert.json;
+        };
+        document.getElementById('jsonTemplateSelect').onchange = function() {
+            const val = this.value;
+            document.getElementById('viewEditConfigData').value = configTemplates[val].json;
+        };
+    }
+});
+
+// Patch renderVisualConfigFields to support easy/expert
+let currentVisualConfig = {};
+function renderVisualConfigFields(jsonObj, readOnly = true, parentKey = '', level = 0, mode = visualMode) {
+    // Only show selected fields in easy mode, all fields in expert mode
+    const easyFields = ['strategy', 'exchange', 'timeframe'];
+    const container = parentKey ? document.createElement('div') : document.getElementById('visualConfigFields');
+    if (!jsonObj || typeof jsonObj !== 'object') return;
+    if (!parentKey) container.innerHTML = '';
+    Object.keys(jsonObj).forEach(key => {
+        if (mode === 'easy' && !easyFields.includes(key) && !parentKey) return;
+        const value = jsonObj[key];
+        let row = document.createElement('div');
+        row.className = 'mb-2';
+        row.style.marginLeft = (level * 18) + 'px';
+        let label = document.createElement('label');
+        label.className = 'form-label fw-bold';
+        label.textContent = key + ' ';
+        let typeHint = document.createElement('span');
+        typeHint.className = 'badge bg-secondary ms-1';
+        if (typeof value === 'string') typeHint.textContent = 'string';
+        else if (typeof value === 'number') typeHint.textContent = 'number';
+        else if (typeof value === 'boolean') typeHint.textContent = 'bool';
+        else if (Array.isArray(value)) typeHint.textContent = 'array';
+        else if (typeof value === 'object' && value !== null) typeHint.textContent = 'object';
+        else typeHint.textContent = typeof value;
+        label.appendChild(typeHint);
+        row.appendChild(label);
+        if (typeof value === 'object' && value !== null) {
+            // Collapsible Bootstrap card for objects/arrays
+            const collapseId = 'collapse_' + (parentKey ? parentKey + '_' : '') + key;
+            let card = document.createElement('div');
+            card.className = 'card mb-2 border-primary shadow-sm';
+            card.style.background = level % 2 === 0 ? '#e2e6ea' : '#cfd4da';
+            let cardHeader = document.createElement('div');
+            cardHeader.className = 'card-header py-1 px-2 d-flex align-items-center';
+            cardHeader.style.background = level % 2 === 0 ? '#c7cfe2' : '#b0b8c9';
+            let collapseBtn = document.createElement('button');
+            collapseBtn.type = 'button';
+            collapseBtn.className = 'btn btn-link btn-sm p-0 me-2';
+            collapseBtn.setAttribute('data-bs-toggle', 'collapse');
+            collapseBtn.setAttribute('data-bs-target', '#' + collapseId);
+            collapseBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+            cardHeader.appendChild(collapseBtn);
+            let headerLabel = document.createElement('span');
+            headerLabel.className = 'fw-bold';
+            headerLabel.textContent = key + (Array.isArray(value) ? ' [array]' : ' [object]');
+            cardHeader.appendChild(headerLabel);
+            card.appendChild(cardHeader);
+            let collapseDiv = document.createElement('div');
+            collapseDiv.className = 'collapse show';
+            collapseDiv.id = collapseId;
+            let cardBody = document.createElement('div');
+            cardBody.className = 'card-body py-2 px-2';
+            if (Array.isArray(value)) {
+                value.forEach((item, idx) => {
+                    let arrLabel = document.createElement('div');
+                    arrLabel.className = 'fw-bold text-muted small';
+                    arrLabel.textContent = `[${idx}]`;
+                    cardBody.appendChild(arrLabel);
+                    if (typeof item === 'object' && item !== null) {
+                        cardBody.appendChild(renderVisualConfigFields(item, readOnly, collapseId + '_' + idx, level + 1, mode));
+                    } else {
+                        let arrInput = document.createElement('input');
+                        arrInput.type = 'text';
+                        arrInput.className = 'form-control mb-2';
+                        arrInput.value = item;
+                        arrInput.readOnly = readOnly;
+                        arrInput.disabled = readOnly;
+                        cardBody.appendChild(arrInput);
+                    }
+                });
+            } else {
+                cardBody.appendChild(renderVisualConfigFields(value, readOnly, collapseId, level + 1, mode));
+            }
+            collapseDiv.appendChild(cardBody);
+            card.appendChild(collapseDiv);
+            row.appendChild(card);
+        } else {
+            // Primitive
+            let input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+            input.value = value;
+            input.readOnly = readOnly;
+            input.disabled = readOnly;
+            input.id = 'visualConfig_' + (parentKey ? parentKey + '_' : '') + key;
+            row.appendChild(input);
+        }
+        container.appendChild(row);
+    });
+    if (parentKey) return container;
+}
+
+// --- Keep JSON in sync with Visual tab ---
+function updateJsonFromVisual(mode) {
+    let json;
+    if (mode === 'easy') {
+        json = configTemplates.easy.json;
+    } else {
+        // In expert mode, try to build JSON from all fields (or use expert template as fallback)
+        try {
+            // You can expand this to actually serialize all visual fields if needed
+            json = configTemplates.expert.json;
+        } catch {
+            json = configTemplates.expert.json;
+        }
+    }
+    document.getElementById('viewEditConfigData').value = json;
+}
+
+// Patch Easy/Expert toggle in Visual tab to update JSON
+if (document.getElementById('visualEasyBtn')) {
+    document.getElementById('visualEasyBtn').onclick = function() {
+        visualMode = 'easy';
+        this.classList.add('btn-primary');
+        this.classList.remove('btn-secondary');
+        document.getElementById('visualExpertBtn').classList.remove('btn-primary');
+        document.getElementById('visualExpertBtn').classList.add('btn-secondary');
+        renderVisualConfigFields(currentVisualConfig, true, '', 0, 'easy');
+        updateJsonFromVisual('easy');
+    };
+}
+if (document.getElementById('visualExpertBtn')) {
+    document.getElementById('visualExpertBtn').onclick = function() {
+        visualMode = 'expert';
+        this.classList.add('btn-primary');
+        this.classList.remove('btn-secondary');
+        document.getElementById('visualEasyBtn').classList.remove('btn-primary');
+        document.getElementById('visualEasyBtn').classList.add('btn-secondary');
+        renderVisualConfigFields(currentVisualConfig, true, '', 0, 'expert');
+        updateJsonFromVisual('expert');
+    };
+}
+
+// Optionally, update JSON when visual fields change (for live sync)
+document.getElementById('visualConfigForm').addEventListener('input', function() {
+    // For demo, just update with current mode's template
+    updateJsonFromVisual(visualMode);
+});
+</script>
+{% endblock %}

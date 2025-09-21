@@ -1,0 +1,1421 @@
+// ...existing code...
+
+// Place at the end of the file to avoid JS merge/overflow issues
+<script>
+// Category selector logic for strategy edit modal (matches pairlists)
+function showStrategyCategorySelector(category) {
+    const row = document.getElementById('strategyCategoryEditRow');
+    const group = document.getElementById('strategyCategoryGroup');
+    const input = document.getElementById('strategyCategory');
+    if (row && group && input) {
+        row.classList.remove('d-none');
+        // Remove all active states and remove old click listeners
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.classList.remove('active');
+            // Remove all previous click listeners by cloning
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+        });
+        // Re-query after replacement
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (!editMode) return; // Only allow change in edit mode
+                group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                input.value = btn.getAttribute('data-value');
+            });
+        });
+        // Set initial value
+        let found = false;
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            if (btn.getAttribute('data-value') === category) {
+                btn.classList.add('active');
+                input.value = category;
+                found = true;
+            }
+        });
+        if (!found) {
+            group.querySelector('.category-select-btn[data-value="custom"]').classList.add('active');
+            input.value = 'custom';
+        }
+        // Always disable category selector in view mode, enable in edit mode
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.disabled = !editMode;
+        });
+    }
+}
+// Setup for clone modal (already present, but ensure not duplicated)
+document.addEventListener('DOMContentLoaded', function() {
+    const group = document.getElementById('cloneStrategyCategoryGroup');
+    if (group) {
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('cloneStrategyCategory').value = btn.getAttribute('data-value');
+            });
+        });
+        // Set default active
+        group.querySelector('.category-select-btn[data-value="custom"]').classList.add('active');
+    }
+
+    // Setup for create modal (unique id)
+    const createGroup = document.getElementById('newStrategyCategoryGroup');
+    if (createGroup) {
+        createGroup.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                createGroup.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('newStrategyCategory').value = btn.getAttribute('data-value');
+            });
+        });
+        // Set default active
+        createGroup.querySelector('.category-select-btn[data-value="custom"]').classList.add('active');
+    }
+});
+</script>
+<!-- Clone Strategy Modal -->
+<div class="modal fade" id="cloneStrategyModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Clone Strategy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input id="cloneStrategyName" class="form-control mb-2" placeholder="New Strategy Name (no .py)">
+                <div class="mb-2">
+                    <label class="form-label">Category</label>
+                    <div id="cloneStrategyCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                        <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
+                        <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
+                        <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
+                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
+                    </div>
+                    <input type="hidden" id="cloneStrategyCategory" value="custom" required>
+                </div>
+                <textarea id="cloneStrategyCode" class="form-control font-monospace" rows="15" style="font-family: 'Courier New', monospace; font-size: 14px;"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="cloneStrategySave()">Clone</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% extends "base.html" %}
+
+{% block title %}Strategies - FreqTrade Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0"><i class="fas fa-brain"></i> Strategy Management</h4>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-primary strategy-action-btn" onclick="refreshData()">
+                            <i class="fas fa-sync"></i> Reload Strategies
+                        </button>
+                        <button type="button" class="btn btn-outline-success strategy-action-btn" onclick="showCreateStrategyModal()">
+                            <i class="fas fa-plus"></i> Create Strategy
+                        </button>
+                        <button type="button" class="btn btn-outline-info strategy-action-btn" onclick="showUploadStrategyModal()">
+                            <i class="fas fa-upload"></i> Upload Strategy
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Category Filter Group (visible in both views) -->
+                    <div class="row mb-3 d-none d-lg-flex"><div class="col-md-8 col-sm-12">
+                        <div id="strategyCategoryFilterGroup" class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-secondary category-filter-btn active" data-category="all">All</button>
+                            <button type="button" class="btn btn-success category-filter-btn" data-category="custom">Custom</button>
+                            <button type="button" class="btn btn-info text-white category-filter-btn" data-category="freqai">FreqAI</button>
+                            <button type="button" class="btn btn-warning category-filter-btn" data-category="example">Example</button>
+                            <button type="button" class="btn btn-secondary category-filter-btn" data-category="test">Test</button>
+                        </div>
+                    </div></div>
+                    <div class="row mb-3 d-lg-none"><div class="col-12">
+                        <div id="strategyCategoryFilterGroupMobile" class="btn-group btn-group-sm w-100" role="group">
+                            <button type="button" class="btn btn-outline-secondary category-filter-btn active" data-category="all">All</button>
+                            <button type="button" class="btn btn-success category-filter-btn" data-category="custom">Custom</button>
+                            <button type="button" class="btn btn-info text-white category-filter-btn" data-category="freqai">FreqAI</button>
+                            <button type="button" class="btn btn-warning category-filter-btn" data-category="example">Example</button>
+                            <button type="button" class="btn btn-secondary category-filter-btn" data-category="test">Test</button>
+                        </div>
+                    </div></div>
+                    <div id="strategiesContainer">
+                        <!-- Desktop view (hidden on small/medium screens, custom breakpoint) -->
+                        <div class="responsive-table-wrapper">
+                            <div class="table-responsive pairlist-table-responsive">
+                                <table class="table table-striped table-hover align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Strategy</th>
+                                            <th>Category</th>
+                                            <th>Filename</th>
+                                            <th>Modified</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="strategiesTableBody">
+                                        {% for strategy in strategies %}
+                                        <tr class="strategy-row" data-type="{{ strategy.type }}">
+                                            <td>
+                                                <strong>{{ strategy.name }}</strong>
+                                                {% if strategy.description %}
+                                                    <br><small class="text-muted">{{ strategy.description[:100] }}{% if strategy.description|length > 100 %}...{% endif %}</small>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if strategy.type == 'freqai' %}
+                                                    <span class="badge bg-info">FreqAI</span>
+                                                {% elif strategy.type == 'custom' %}
+                                                    <span class="badge bg-success">Custom</span>
+                                                {% elif strategy.type == 'example' %}
+                                                    <span class="badge bg-warning">Example</span>
+                                                {% elif strategy.type == 'test' %}
+                                                    <span class="badge bg-secondary">Test</span>
+                                                {% else %}
+                                                    <span class="badge bg-primary">{{ strategy.type|title }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td><code class="small">{{ strategy.filename }}</code></td>
+                                            <td><small>{% if strategy.modified %}{% if strategy.modified.strftime is defined %}{{ strategy.modified.strftime('%Y-%m-%d %H:%M') }}{% else %}{{ strategy.modified[:16] }}{% endif %}{% else %}Unknown{% endif %}</small></td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-outline-primary border-dark" onclick="viewStrategy('{{ strategy.filename }}')" title="View/Edit">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-success border-dark" onclick="copyStrategy('{{ strategy.filename }}')" title="Clone">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-info border-dark" onclick="downloadStrategy('{{ strategy.filename }}')" title="Download">
+                                                        <i class="fas fa-download"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-danger border-dark" onclick="deleteStrategy('{{ strategy.filename }}')" title="Delete">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Mobile/Tablet view (visible below custom breakpoint) -->
+                        <div class="responsive-card-list d-none">
+                            <div class="row" id="strategiesCardContainer">
+                                {% for strategy in strategies %}
+                                <div class="col-12 mb-3 strategy-card" data-type="{{ strategy.type }}">
+                                    <div class="card mb-3 strategy-card" data-type="{{ strategy.type }}">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div>
+                                                    <h6 class="card-title mb-1">{{ strategy.name }}</h6>
+                                                    <small class="text-muted">{{ strategy.filename }}</small>
+                                                </div>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" title="More actions">
+                                                        <i class="fas fa-ellipsis-v"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        <li><a class="dropdown-item" href="#" onclick="viewStrategy('{{ strategy.filename }}')">
+                                                            <i class="fas fa-eye"></i> View/Edit
+                                                        </a></li>
+                                                        <li><a class="dropdown-item" href="#" onclick="copyStrategy('{{ strategy.filename }}')">
+                                                            <i class="fas fa-copy"></i> Clone
+                                                        </a></li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li><a class="dropdown-item text-danger" href="#" onclick="deleteStrategy('{{ strategy.filename }}')">
+                                                            <i class="fas fa-trash"></i> Delete
+                                                        </a></li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                            {% if strategy.description %}
+                                                <p class="card-text small text-muted mb-2">{{ strategy.description[:150] }}{% if strategy.description|length > 150 %}...{% endif %}</p>
+                                            {% endif %}
+                                            <div class="row g-2 mb-3">
+                                                <div class="col-6">
+                                                    <small class="text-muted d-block">Category</small>
+                                                    {% if strategy.type == 'freqai' %}
+                                                        <span class="badge bg-info">FreqAI</span>
+                                                    {% elif strategy.type == 'custom' %}
+                                                        <span class="badge bg-success">Custom</span>
+                                                    {% elif strategy.type == 'example' %}
+                                                        <span class="badge bg-warning">Example</span>
+                                                    {% elif strategy.type == 'test' %}
+                                                        <span class="badge bg-secondary">Test</span>
+                                                    {% else %}
+                                                        <span class="badge bg-primary">{{ strategy.type|title }}</span>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="col-6">
+                                                    <small class="text-muted d-block">Modified</small>
+                                                    <small>{% if strategy.modified %}{% if strategy.modified.strftime is defined %}{{ strategy.modified.strftime('%Y-%m-%d %H:%M') }}{% else %}{{ strategy.modified[:16] }}{% endif %}{% else %}Unknown{% endif %}</small>
+                                                </div>
+                                            </div>
+                                            <div class="d-grid gap-2 d-md-flex">
+                                                <button class="btn btn-primary btn-sm flex-fill" onclick="viewStrategy('{{ strategy.filename }}')">
+                                                    <i class="fas fa-eye"></i> View/Edit
+                                                </button>
+                                                <button class="btn btn-outline-success btn-sm flex-fill" onclick="copyStrategy('{{ strategy.filename }}')">
+                                                    <i class="fas fa-copy"></i> Clone
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+<style>
+/* Custom breakpoint for responsive switch (1200px) */
+@media (max-width: 1200px) {
+    .responsive-table-wrapper { display: none !important; }
+    .responsive-card-list { display: block !important; }
+}
+@media (min-width: 1201px) {
+    .responsive-table-wrapper { display: block !important; }
+    .responsive-card-list { display: none !important; }
+}
+</style>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+<!-- View Strategy Modal -->
+<div class="modal fade" id="viewStrategyModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Strategy Code</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2" id="strategyCategoryEditRow">
+                    <label class="form-label">Category</label>
+                    <div id="strategyCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                        <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
+                        <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
+                        <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
+                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
+                    </div>
+                    <input type="hidden" id="strategyCategory" value="custom" required>
+                </div>
+                <ul class="nav nav-tabs mb-3" id="strategyEditTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="code-tab" data-bs-toggle="tab" data-bs-target="#code-content" type="button" role="tab">Code</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="validate-tab" data-bs-toggle="tab" data-bs-target="#validate-content" type="button" role="tab">Validate</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="strategyEditTabContent">
+                    <div class="tab-pane fade show active" id="code-content" role="tabpanel">
+                        <label class="form-label">Strategy Code</label>
+                        <textarea id="strategyCodeEditor" class="form-control font-monospace mb-2" rows="18" readonly style="font-family: 'Courier New', monospace; font-size: 14px;"></textarea>
+                        <div id="strategyEditHint" class="text-muted small mb-2"></div>
+                    </div>
+                    <div class="tab-pane fade" id="validate-content" role="tabpanel">
+                        <label class="form-label">YAML / Docker Validation</label>
+                        <div id="strategyValidationMsg" class="text-danger small mb-2" style="display:none;"></div>
+                        <pre id="strategyValidationOutput" class="bg-light p-2 border rounded" style="min-height: 120px; font-size: 0.95em;"></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="editStrategyBtn" onclick="enableStrategyEditing()" title="Edit">
+                    <i class="fas fa-pencil-alt"></i> Edit
+                </button>
+                <button type="button" class="btn btn-success d-none" id="saveStrategyBtn" onclick="saveStrategyEdits()">
+                    <i class="fas fa-save"></i> Save
+                </button>
+                <button type="button" class="btn btn-danger d-none" id="cancelEditStrategyBtn" onclick="cancelStrategyEditing()">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Strategy Modal -->
+<div class="modal fade" id="testStrategyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Test Strategy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="testStrategyForm">
+                    <div class="mb-3">
+                        <label for="testPairlist" class="form-label">Test Pairlist</label>
+                        <select class="form-select" id="testPairlist" required>
+                            <option value="">Select test pairlist...</option>
+                            <option value="test_pairs.json">Test Pairs (Small)</option>
+                            <option value="freqai_core_pairs.json">FreqAI Core Pairs</option>
+                            <option value="common_pairs_futures.json">Common Futures Pairs</option>
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="testTimeframe" class="form-label">Timeframe</label>
+                                <select class="form-select" id="testTimeframe">
+                                    <option value="1m">1 minute</option>
+                                    <option value="3m" selected>3 minutes</option>
+                                    <option value="5m">5 minutes</option>
+                                    <option value="15m">15 minutes</option>
+                                    <option value="1h">1 hour</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="testDays" class="form-label">Test Days</label>
+                                <input type="number" class="form-control" id="testDays" value="7" min="1" max="30">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="testStake" class="form-label">Stake Amount (USDT)</label>
+                        <input type="number" class="form-control" id="testStake" value="100" min="10">
+                    </div>
+                </form>
+                
+                <div id="testResults" style="display: none;">
+                    <hr>
+                    <h6>Test Results:</h6>
+                    <pre id="testOutput" class="bg-dark text-light p-3" style="height: 300px; overflow-y: auto;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="runStrategyTest()" id="runTestBtn">
+                    <i class="fas fa-play"></i> Run Test
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Strategy Modal -->
+<div class="modal fade" id="createStrategyModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New Strategy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createStrategyForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="newStrategyName" class="form-label">Strategy Name</label>
+                            <input type="text" class="form-control" id="newStrategyName" placeholder="MyStrategy" required>
+                            <div class="form-text">Will be saved as {name}.py</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Category</label>
+                            <div id="newStrategyCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                                <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
+                                <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
+                                <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
+                                <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
+                            </div>
+                            <input type="hidden" id="newStrategyCategory" value="custom" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="newStrategyDescription" class="form-label">Description (Optional)</label>
+                        <textarea class="form-control" id="newStrategyDescription" rows="2" placeholder="Brief description of your strategy..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="strategyTemplate" class="form-label">Template</label>
+                        <select class="form-select" id="strategyTemplate" onchange="loadTemplate()">
+                            <option value="basic">Basic Strategy Template</option>
+                            <option value="advanced">Advanced Strategy Template</option>
+                            <option value="freqai">FreqAI Template</option>
+                            <option value="blank">Blank (Start from scratch)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="newStrategyCode" class="form-label">Strategy Code</label>
+                        <textarea class="form-control font-monospace" id="newStrategyCode" rows="15" placeholder="# Your strategy code here..." style="font-family: 'Courier New', monospace; font-size: 14px;"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveNewStrategy()">
+                    <i class="fas fa-save"></i> Create Strategy
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Strategy Modal (matches pairlists style) -->
+<div class="modal fade" id="uploadStrategyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload Strategy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="uploadStrategyForm">
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <div id="uploadStrategyCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                            <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
+                            <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
+                            <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
+                            <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
+                        </div>
+                        <input type="hidden" id="uploadStrategyType" value="custom" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="strategyFile" class="form-label">Select Python File</label>
+                        <input type="file" class="form-control" id="strategyFile" accept=".py" required>
+                    </div>
+                    <div id="uploadStrategyDuplicateWarning" class="text-danger small mt-2" style="display:none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="uploadStrategyFile()" id="uploadStrategyBtn" disabled>Upload</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View/Edit Strategy Modal (pairlists style, strategy-specific) -->
+<div class="modal fade" id="viewEditStrategyModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="viewEditStrategyTitle">Strategy</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label for="viewEditStrategyName" class="form-label">Strategy Name</label>
+          <input type="text" class="form-control" id="viewEditStrategyName" readonly>
+        </div>
+        <div class="mb-2" id="strategyCategoryEditRow">
+          <label class="form-label">Category</label>
+          <div id="strategyCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+            <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
+            <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
+            <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
+            <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
+          </div>
+          <input type="hidden" id="strategyCategory" value="custom" required>
+        </div>
+        <label class="form-label">Strategy Code</label>
+        <textarea id="strategyCodeEditor" class="form-control font-monospace mb-2" rows="18" readonly style="font-family: 'Courier New', monospace; font-size: 14px;"></textarea>
+        <div id="strategyEditHint" class="text-muted small mb-2"></div>
+        <div id="strategyEditValidationMsg" class="text-danger small mb-2" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="editStrategyBtn" onclick="enableStrategyEditing()">Edit</button>
+        <button type="button" class="btn btn-success d-none" id="saveStrategyBtn" onclick="saveStrategyEdits()">Save</button>
+        <button type="button" class="btn btn-danger d-none" id="cancelEditStrategyBtn" onclick="cancelStrategyEditing()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+let currentStrategyFile = '';
+let originalStrategyCode = '';
+let editMode = false;
+
+function setStrategyEditMode(enabled) {
+  editMode = enabled;
+  document.getElementById('editStrategyBtn').classList.toggle('d-none', enabled);
+  document.getElementById('saveStrategyBtn').classList.toggle('d-none', !enabled);
+  document.getElementById('cancelEditStrategyBtn').classList.toggle('d-none', !enabled);
+  document.getElementById('strategyCodeEditor').readOnly = !enabled;
+  // Category selector: enable/disable buttons
+  const group = document.getElementById('strategyCategoryGroup');
+  if (group) {
+    group.querySelectorAll('.category-select-btn').forEach(btn => {
+      btn.disabled = !enabled;
+    });
+  }
+  document.getElementById('strategyEditHint').textContent = '';
+}
+
+function viewEditStrategy(filename) {
+  currentStrategyFile = filename;
+  document.getElementById('viewEditStrategyTitle').textContent = 'Strategy: ' + filename;
+  document.getElementById('viewEditStrategyName').value = filename;
+  setStrategyEditMode(false);
+  document.getElementById('strategyEditHint').textContent = '';
+  document.getElementById('strategyCodeEditor').value = '';
+  document.getElementById('strategyEditValidationMsg').style.display = 'none';
+  fetch('/api/strategy/' + filename + '?meta=1')
+    .then(function(r) { return r.ok ? r.json() : Promise.reject('Failed to load strategy'); })
+    .then(function(data) {
+      var code = data.code || '';
+      var category = data.category || 'custom';
+      originalStrategyCode = code;
+      document.getElementById('strategyCodeEditor').value = code;
+      // Set category selector
+      showStrategyCategorySelector(category);
+      setStrategyEditMode(false);
+      if (!window._strategyModalInstance) {
+        window._strategyModalInstance = new bootstrap.Modal(document.getElementById('viewEditStrategyModal'));
+      }
+      window._strategyModalInstance.show();
+    })
+    .catch(function() {
+      document.getElementById('strategyCodeEditor').value = 'Failed to load strategy code.';
+      if (!window._strategyModalInstance) {
+        window._strategyModalInstance = new bootstrap.Modal(document.getElementById('viewEditStrategyModal'));
+      }
+      window._strategyModalInstance.show();
+    });
+}
+
+function enableStrategyEditing() {
+  setStrategyEditMode(true);
+}
+
+function cancelStrategyEditing() {
+  document.getElementById('strategyCodeEditor').value = originalStrategyCode;
+  setStrategyEditMode(false);
+  document.getElementById('strategyEditValidationMsg').style.display = 'none';
+}
+
+function validatePythonSyntax(code) {
+  // Very basic check: ensure no obvious syntax errors (client-side only)
+  // For real validation, use server-side or a Python parser
+  try {
+    // Disallow empty code
+    if (!code.trim()) throw new Error('Code cannot be empty.');
+    // Disallow tabs mixed with spaces (common error)
+    if (/^\s*\t+.*$/m.test(code) && /^\s* +.*$/m.test(code)) {
+      throw new Error('Do not mix tabs and spaces for indentation.');
+    }
+    // Disallow unclosed triple quotes
+    const tripleQuotes = (code.match(/'''|"""/g) || []).length;
+    if (tripleQuotes % 2 !== 0) throw new Error('Unclosed triple quotes detected.');
+    // Disallow unclosed parentheses/brackets/braces
+    const stack = [];
+    for (let c of code) {
+      if (c === '(') stack.push(')');
+      if (c === '[') stack.push(']');
+      if (c === '{') stack.push('}');
+      if (c === ')' || c === ']' || c === '}') {
+        if (stack.pop() !== c) throw new Error('Unmatched parenthesis/bracket/brace.');
+      }
+    }
+    if (stack.length) throw new Error('Unmatched parenthesis/bracket/brace.');
+    return '';
+  } catch (e) {
+    return e.message;
+  }
+}
+
+function saveStrategyEdits() {
+  var newCode = document.getElementById('strategyCodeEditor').value;
+  var validationMsg = validatePythonSyntax(newCode);
+  if (validationMsg) {
+    document.getElementById('strategyEditValidationMsg').textContent = validationMsg;
+    document.getElementById('strategyEditValidationMsg').style.display = '';
+    return;
+  }
+  document.getElementById('strategyEditValidationMsg').style.display = 'none';
+  fetch('/api/strategy/' + currentStrategyFile, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'text/plain' },
+    body: newCode
+  })
+    .then(function(r) { return r.ok ? r.text() : Promise.reject('Failed to save'); })
+    .then(function() {
+      showAlert('success', 'Strategy "' + currentStrategyFile + '" saved.');
+      originalStrategyCode = newCode;
+      setStrategyEditMode(false);
+      refreshData();
+    })
+    .catch(function() { showAlert('danger', 'Failed to save strategy.'); });
+}
+
+// Category filter logic for strategies (table and card view)
+document.addEventListener('DOMContentLoaded', function() {
+    function setupCategoryFilter(groupId) {
+        const group = document.getElementById(groupId);
+        if (!group) return;
+        group.addEventListener('click', function(e) {
+            if (e.target.classList.contains('category-filter-btn')) {
+                // Remove active from all in both filter groups
+                document.querySelectorAll('.category-filter-btn').forEach(btn => btn.classList.remove('active'));
+                // Set active only on the clicked one
+                e.target.classList.add('active');
+                // Sync the other filter group
+                const value = e.target.getAttribute('data-category');
+                document.querySelectorAll('.category-filter-btn').forEach(btn => {
+                    if (btn.getAttribute('data-category') === value) btn.classList.add('active');
+                });
+                // Table rows
+                const rows = document.querySelectorAll('#strategiesTableBody tr');
+                rows.forEach(row => {
+                    if (value === 'all' || row.getAttribute('data-type') === value) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+                // Card view
+                const cards = document.querySelectorAll('.strategy-card');
+                cards.forEach(card => {
+                    if (value === 'all' || card.getAttribute('data-type') === value) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            }
+        });
+    }
+    setupCategoryFilter('strategyCategoryFilterGroup');
+    setupCategoryFilter('strategyCategoryFilterGroupMobile');
+});
+
+function refreshData() {
+    location.reload();
+}
+
+function viewStrategy(filename) {
+    currentStrategyFile = filename;
+    document.querySelector('#viewStrategyModal .modal-title').textContent = 'Strategy: ' + filename;
+    // Reset all modal state
+    setStrategyEditMode(false);
+    document.getElementById('strategyEditHint').textContent = '';
+    document.getElementById('strategyCodeEditor').value = '';
+    // Fetch both code and metadata (simulate: expects /api/strategy/<filename>?meta=1 returns {code, category})
+    fetch('/api/strategy/' + filename + '?meta=1')
+        .then(function(r) { return r.ok ? r.json() : Promise.reject('Failed to load strategy'); })
+        .then(function(data) {
+            var code = data.code || '';
+            var category = data.category || 'custom';
+            originalStrategyCode = code;
+            document.getElementById('strategyCodeEditor').value = code;
+            // Set category selector (showStrategyCategorySelector)
+            showStrategyCategorySelector(category);
+            // Detect YAML or Docker
+            isStrategyYaml = filename.endsWith('.yaml') || filename.endsWith('.yml');
+            isStrategyDocker = filename.toLowerCase().indexOf('docker') !== -1;
+            // Show validation tab if relevant
+            document.getElementById('validate-tab').style.display = (isStrategyYaml || isStrategyDocker) ? '' : 'none';
+            if (isStrategyYaml) {
+                validateYaml(code);
+            } else if (isStrategyDocker) {
+                validateDocker(code);
+            } else {
+                document.getElementById('strategyValidationMsg').style.display = 'none';
+                document.getElementById('strategyValidationOutput').textContent = '';
+            }
+            // Reset editing state again to ensure all UI is correct
+            setStrategyEditMode(false);
+            // Only create the modal instance once and reuse it
+            if (!window._strategyModalInstance) {
+                window._strategyModalInstance = new bootstrap.Modal(document.getElementById('viewStrategyModal'));
+            }
+            window._strategyModalInstance.show();
+        })
+        .catch(function() {
+            document.getElementById('strategyCodeEditor').value = 'Failed to load strategy code.';
+            document.getElementById('strategyCategoryBadge').textContent = '';
+            document.getElementById('strategyCategoryBadge').className = 'badge';
+            document.getElementById('validate-tab').style.display = 'none';
+            if (!window._strategyModalInstance) {
+                window._strategyModalInstance = new bootstrap.Modal(document.getElementById('viewStrategyModal'));
+            }
+            window._strategyModalInstance.show();
+        });
+// Enable editing for strategy code
+function enableStrategyEditing() {
+    setStrategyEditMode(true);
+}
+
+function cancelStrategyEditing() {
+    document.getElementById('strategyCodeEditor').value = originalStrategyCode;
+    setStrategyEditMode(false);
+}
+
+function saveStrategyEdits() {
+    var newCode = document.getElementById('strategyCodeEditor').value;
+    // Optionally validate before saving
+    if (isStrategyYaml) {
+        if (!validateYaml(newCode)) return;
+    } else if (isStrategyDocker) {
+        if (!validateDocker(newCode)) return;
+    }
+    // Save to server (simulate)
+    fetch('/api/strategy/' + currentStrategyFile, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/plain' },
+        body: newCode
+    })
+    .then(function(r) { return r.ok ? r.text() : Promise.reject('Failed to save'); })
+    .then(function() {
+        showAlert('success', 'Strategy "' + currentStrategyFile + '" saved.');
+        originalStrategyCode = newCode;
+        setStrategyEditMode(false);
+        // Close edit modal if present and refresh
+        const editModal = document.getElementById('editStrategyModal');
+        if (editModal) {
+            const modalInstance = bootstrap.Modal.getInstance(editModal);
+            if (modalInstance) modalInstance.hide();
+        }
+        refreshData();
+    })
+    .catch(function() { showAlert('danger', 'Failed to save strategy.'); });
+}
+
+// YAML validation (simple, client-side)
+function validateYaml(code) {
+    try {
+        // Use js-yaml if available, else basic check
+        if (window.jsyaml) {
+            window.jsyaml.load(code);
+        } else {
+            if (!/^\s*\w+:/m.test(code)) throw new Error('Not valid YAML');
+        }
+        document.getElementById('strategyValidationMsg').style.display = 'none';
+        document.getElementById('strategyValidationOutput').textContent = 'YAML is valid.';
+        return true;
+    } catch (e) {
+        document.getElementById('strategyValidationMsg').style.display = '';
+        document.getElementById('strategyValidationMsg').textContent = 'YAML Error: ' + e.message;
+        document.getElementById('strategyValidationOutput').textContent = '';
+        return false;
+    }
+}
+// Dockerfile validation (very basic)
+function validateDocker(code) {
+    if (/^FROM\s+/m.test(code)) {
+        document.getElementById('strategyValidationMsg').style.display = 'none';
+        document.getElementById('strategyValidationOutput').textContent = 'Dockerfile looks valid.';
+        return true;
+    } else {
+        document.getElementById('strategyValidationMsg').style.display = '';
+        document.getElementById('strategyValidationMsg').textContent = 'Dockerfile must start with a FROM statement.';
+        document.getElementById('strategyValidationOutput').textContent = '';
+        return false;
+    }
+}
+}
+
+
+
+// Expose modal openers globally for HTML onclick
+window.viewStrategy = viewStrategy;
+window.copyStrategy = copyStrategy;
+
+function copyStrategy(filename) {
+    document.getElementById('cloneStrategyName').value = filename.replace('.py', '_copy');
+    document.getElementById('cloneStrategyCode').value = 'Loading...';
+    fetch(`/api/strategy/${filename}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.code) {
+                document.getElementById('cloneStrategyCode').value = data.code;
+            } else {
+                document.getElementById('cloneStrategyCode').value = 'Failed to load strategy for cloning.';
+            }
+        })
+        .catch(() => {
+            document.getElementById('cloneStrategyCode').value = 'Failed to load strategy for cloning.';
+        });
+    new bootstrap.Modal(document.getElementById('cloneStrategyModal')).show();
+}
+
+function cloneStrategySave() {
+    const name = document.getElementById('cloneStrategyName').value.trim();
+    const code = document.getElementById('cloneStrategyCode').value;
+    const category = document.getElementById('cloneStrategyCategory').value;
+    if (!name) {
+        alert('Please enter a name for the cloned strategy.');
+        return;
+    }
+    fetch('/api/strategy/clone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, code: code, category: category })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('cloneStrategyModal')).hide();
+            alert('Strategy cloned successfully!');
+            refreshData();
+        } else {
+            alert('Failed to clone strategy: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(() => alert('Failed to clone strategy.'));
+}
+// Category selector logic for clone strategy modal
+document.addEventListener('DOMContentLoaded', function() {
+    const group = document.getElementById('cloneStrategyCategoryGroup');
+    if (group) {
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('cloneStrategyCategory').value = btn.getAttribute('data-value');
+            });
+        });
+        // Set default active
+        group.querySelector('.category-select-btn[data-value="custom"]').classList.add('active');
+    }
+});
+
+function testStrategy(filename) {
+    currentStrategyFile = filename;
+    document.querySelector('#testStrategyModal .modal-title').textContent = `Test: ${filename}`;
+    document.getElementById('testResults').style.display = 'none';
+    
+    new bootstrap.Modal(document.getElementById('testStrategyModal')).show();
+}
+
+function runStrategyTest() {
+    const btn = document.getElementById('runTestBtn');
+    const originalText = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
+    btn.disabled = true;
+    
+    // Simulate test run
+    setTimeout(() => {
+        document.getElementById('testResults').style.display = 'block';
+        document.getElementById('testOutput').textContent = `
+FreqTrade Strategy Test Results
+==============================
+
+Strategy: ${currentStrategyFile}
+Timeframe: ${document.getElementById('testTimeframe').value}
+Test Days: ${document.getElementById('testDays').value}
+Stake Amount: ${document.getElementById('testStake').value} USDT
+
+Results:
+--------
+Total Trades: 45
+Winning Trades: 28 (62.2%)
+Losing Trades: 17 (37.8%)
+
+Total Profit: 12.5%
+Sharpe Ratio: 1.45
+Max Drawdown: -8.2%
+
+Best Trade: +4.2%
+Worst Trade: -2.1%
+Average Trade: +0.28%
+
+Note: This is a simulated result for demonstration purposes.
+In a real implementation, this would run actual backtesting.
+        `;
+        
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }, 3000);
+}
+
+function deleteStrategy(filename) {
+    if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+        return;
+    }
+    fetch('/api/strategy/' + filename, {
+        method: 'DELETE'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', `Strategy "${filename}" deleted successfully!`);
+            refreshData();
+        } else {
+            showAlert('danger', data.error || 'Failed to delete strategy.');
+        }
+    })
+    .catch(() => showAlert('danger', 'Failed to delete strategy.'));
+}
+
+function uploadStrategy() {
+    new bootstrap.Modal(document.getElementById('uploadStrategyModal')).show();
+}
+
+function uploadStrategyFile() {
+    const fileInput = document.getElementById('strategyFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showAlert('danger', 'Please select a strategy file');
+        return;
+    }
+    
+    if (!file.name.endsWith('.py')) {
+        showAlert('danger', 'Please select a Python (.py) file');
+        return;
+    }
+    
+    // Here you would upload the file to the server
+    showAlert('success', `Strategy "${file.name}" would be uploaded`);
+    bootstrap.Modal.getInstance(document.getElementById('uploadStrategyModal')).hide();
+    
+    // Reset form
+    document.getElementById('uploadStrategyForm').reset();
+}
+
+
+function downloadStrategy(filename) {
+    if (!filename) return;
+    fetch(`/api/strategy/download/${filename}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to download strategy.');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            showAlert('success', `Strategy "${filename}" downloaded.`);
+        })
+        .catch(() => {
+            showAlert('danger', 'Failed to download strategy.');
+        });
+}
+
+function editCurrentStrategy() {
+    if (!currentStrategyFile) return;
+    
+    bootstrap.Modal.getInstance(document.getElementById('viewStrategyModal')).hide();
+    editStrategy(currentStrategyFile);
+}
+
+function showCreateStrategyModal() {
+    // Load basic template by default
+    loadTemplate();
+    new bootstrap.Modal(document.getElementById('createStrategyModal')).show();
+}
+
+function showUploadStrategyModal() {
+    new bootstrap.Modal(document.getElementById('uploadStrategyModal')).show();
+}
+
+function loadTemplate() {
+    const template = document.getElementById('strategyTemplate').value;
+    const codeTextarea = document.getElementById('newStrategyCode');
+    
+    let templateCode = '';
+    
+    switch(template) {
+        case 'basic':
+            templateCode = `# FreqTrade Strategy Template
+import numpy as np
+import pandas as pd
+from freqtrade.strategy import IStrategy
+from pandas import DataFrame
+
+class MyStrategy(IStrategy):
+    """
+    Basic strategy template for FreqTrade
+    """
+    
+    # Strategy interface version
+    INTERFACE_VERSION: int = 3
+    
+    # Optimal timeframe for the strategy
+    timeframe = '5m'
+    
+    # ROI table
+    minimal_roi = {
+        "60": 0.01,
+        "30": 0.02,
+        "0": 0.04
+    }
+    
+    # Stoploss
+    stoploss = -0.10
+    
+    def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Add indicators to the given dataframe
+        """
+        # Add your indicators here
+        # Example: dataframe['sma'] = ta.SMA(dataframe, timeperiod=14)
+        return dataframe
+    
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Define entry signals
+        """
+        dataframe.loc[
+            (
+                # Add your buy conditions here
+            ),
+            'enter_long'] = 1
+        
+        return dataframe
+    
+    def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Define exit signals
+        """
+        dataframe.loc[
+            (
+                # Add your sell conditions here
+            ),
+            'exit_long'] = 1
+        
+        return dataframe`;
+            break;
+            
+        case 'advanced':
+            templateCode = `# Advanced FreqTrade Strategy
+import numpy as np
+import pandas as pd
+import talib.abstract as ta
+from freqtrade.strategy import IStrategy, informative
+from pandas import DataFrame
+
+class AdvancedStrategy(IStrategy):
+    """
+    Advanced strategy template with multiple timeframes
+    """
+    
+    INTERFACE_VERSION: int = 3
+    timeframe = '5m'
+    
+    minimal_roi = {
+        "60": 0.01,
+        "30": 0.03,
+        "0": 0.05
+    }
+    
+    stoploss = -0.08
+    trailing_stop = True
+    trailing_stop_positive = 0.01
+    trailing_stop_positive_offset = 0.02
+    
+    @informative('1h')
+    def populate_indicators_1h(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """1h timeframe indicators"""
+        dataframe['sma_200'] = ta.SMA(dataframe, timeperiod=200);
+        return dataframe
+    
+    def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """5m timeframe indicators"""
+        dataframe['rsi'] = ta.RSI(dataframe, timeperiod=14)
+        dataframe['sma_50'] = ta.SMA(dataframe, timeperiod=50)
+        dataframe['ema_21'] = ta.EMA(dataframe, timeperiod=21)
+        return dataframe
+    
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        dataframe.loc[
+            (
+                (dataframe['rsi'] < 30) &
+                (dataframe['close'] > dataframe['sma_50']) &
+                (dataframe['sma_200_1h'] > dataframe['sma_200_1h'].shift(1))
+            ),
+            'enter_long'] = 1
+        return dataframe
+    
+    def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        dataframe.loc[
+            (
+                (dataframe['rsi'] > 70)
+            ),
+            'exit_long'] = 1
+        return dataframe`;
+            break;
+            
+        case 'freqai':
+            templateCode = `# FreqAI Strategy Template
+import numpy as np
+import pandas as pd
+from freqtrade.strategy import IStrategy
+from pandas import DataFrame
+
+class FreqAIStrategy(IStrategy):
+    """
+    FreqAI strategy template
+    """
+    
+    INTERFACE_VERSION: int = 3
+    timeframe = '5m'
+    
+    minimal_roi = {"0": 100}
+    stoploss = -0.05
+    
+    # FreqAI settings
+    freqai_enabled = True
+    freqai_model_save_type = 'stable'
+    
+    def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        # Add features for FreqAI
+        dataframe['rsi'] = ta.RSI(dataframe, timeperiod=14)
+        dataframe['sma_20'] = ta.SMA(dataframe, timeperiod=20)
+        dataframe['ema_12'] = ta.EMA(dataframe, timeperiod=12)
+        
+        # FreqAI will use these features
+        dataframe["&-rsi"] = dataframe["rsi"] / 100.0
+        dataframe["&-sma_20"] = dataframe["sma_20"] / dataframe["close"];
+        dataframe["&-ema_12"] = dataframe["ema_12"] / dataframe["close"];
+        
+        return dataframe
+    
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        # FreqAI prediction for entry
+        dataframe.loc[
+            (dataframe["do_predict"] == 1) &
+            (dataframe["&-prediction"] > 0.5),
+            "enter_long",
+        ] = 1
+        return dataframe
+    
+    def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        # FreqAI prediction for exit
+        dataframe.loc[
+            (dataframe["do_predict"] == 1) &
+            (dataframe["&-prediction"] < 0.5),
+            "exit_long",
+        ] = 1
+        return dataframe`;
+            break;
+            
+        case 'blank':
+        default:
+            templateCode = '# Start writing your strategy here...';
+            break;
+    }
+    
+    codeTextarea.value = templateCode;
+}
+
+function saveNewStrategy() {
+    const name = document.getElementById('newStrategyName').value.trim();
+    const type = document.getElementById('newStrategyType').value;
+    const description = document.getElementById('newStrategyDescription').value.trim();
+    const code = document.getElementById('newStrategyCode').value.trim();
+    
+    if (!name) {
+        showAlert('danger', 'Please enter a strategy name');
+        return;
+    }
+    
+    if (!code) {
+        showAlert('danger', 'Please enter strategy code');
+        return;
+    }
+    
+    // Here you would save the strategy to the server
+    fetch('/api/strategy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, type: type, description: description, code: code })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', `Strategy "${name}.py" created successfully!`);
+            bootstrap.Modal.getInstance(document.getElementById('createStrategyModal')).hide();
+            document.getElementById('createStrategyForm').reset();
+            document.getElementById('newStrategyCode').value = '';
+            refreshData();
+        } else {
+            showAlert('danger', data.error || 'Failed to create strategy.');
+        }
+    })
+    .catch(() => showAlert('danger', 'Failed to create strategy.'));
+}
+
+
+// --- Upload Strategy Modal Logic (matches pairlists) ---
+let existingStrategyFilenames = [];
+document.addEventListener('DOMContentLoaded', function() {
+    // Fetch existing strategy filenames for duplicate check
+    fetch('/api/strategies')
+        .then(r => r.json())
+        .then(data => {
+            if (data.strategies) {
+                existingStrategyFilenames = data.strategies.map(s => s.filename.toLowerCase());
+            }
+        });
+    // Category select logic for upload modal
+    const group = document.getElementById('uploadStrategyCategoryGroup');
+    const input = document.getElementById('uploadStrategyType');
+    if (group && input) {
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                input.value = btn.getAttribute('data-value');
+            });
+        });
+        group.querySelector('.category-select-btn[data-value="custom"]').classList.add('active');
+    }
+    // File input logic
+    const fileInput = document.getElementById('strategyFile');
+    const uploadBtn = document.getElementById('uploadStrategyBtn');
+    const duplicateWarning = document.getElementById('uploadStrategyDuplicateWarning');
+    if (fileInput && uploadBtn) {
+        fileInput.addEventListener('change', function() {
+            const file = fileInput.files[0];
+            if (!file) {
+                uploadBtn.disabled = true;
+                duplicateWarning.style.display = 'none';
+                return;
+            }
+            if (!file.name.endsWith('.py')) {
+                duplicateWarning.textContent = 'Only .py files are allowed.';
+                duplicateWarning.style.display = '';
+                uploadBtn.disabled = true;
+                fileInput.value = '';
+                return;
+            }
+            // Duplicate check
+            const isDuplicate = existingStrategyFilenames.includes(file.name.toLowerCase());
+            if (isDuplicate) {
+                duplicateWarning.textContent = 'A strategy with this filename already exists!';
+                duplicateWarning.style.display = '';
+                uploadBtn.disabled = true;
+            } else {
+                duplicateWarning.textContent = '';
+                duplicateWarning.style.display = 'none';
+                uploadBtn.disabled = false;
+            }
+        });
+    }
+    // Reset modal on open
+    const uploadModal = document.getElementById('uploadStrategyModal');
+    if (uploadModal) {
+        uploadModal.addEventListener('show.bs.modal', function() {
+            if (fileInput) fileInput.value = '';
+            if (uploadBtn) uploadBtn.disabled = true;
+            if (duplicateWarning) duplicateWarning.style.display = 'none';
+        });
+    }
+});
+
+function uploadStrategyFile() {
+    const fileInput = document.getElementById('strategyFile');
+    const file = fileInput.files[0];
+    const category = document.getElementById('uploadStrategyType').value;
+    const uploadBtn = document.getElementById('uploadStrategyBtn');
+    const duplicateWarning = document.getElementById('uploadStrategyDuplicateWarning');
+    if (!file) {
+        duplicateWarning.textContent = 'Please select a file to upload.';
+        duplicateWarning.style.display = '';
+        if (uploadBtn) uploadBtn.disabled = true;
+        return;
+    }
+    if (!file.name.endsWith('.py')) {
+        duplicateWarning.textContent = 'Only .py files are allowed.';
+        duplicateWarning.style.display = '';
+        fileInput.value = '';
+        if (uploadBtn) uploadBtn.disabled = true;
+        return;
+    }
+    // Duplicate check
+    const isDuplicate = existingStrategyFilenames.includes(file.name.toLowerCase());
+    if (isDuplicate) {
+        duplicateWarning.textContent = 'A strategy with this filename already exists!';
+        duplicateWarning.style.display = '';
+        if (uploadBtn) uploadBtn.disabled = true;
+        return;
+    }
+    // Upload file to server
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', category);
+    fetch('/api/strategy/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('uploadStrategyModal')).hide();
+            showAlert('success', 'Strategy uploaded successfully!');
+            document.getElementById('uploadStrategyForm').reset();
+            if (uploadBtn) uploadBtn.disabled = true;
+            refreshData();
+        } else {
+            duplicateWarning.textContent = data.error || 'Failed to upload strategy.';
+            duplicateWarning.style.display = '';
+        }
+    })
+    .catch(() => {
+        duplicateWarning.textContent = 'Failed to upload strategy.';
+        duplicateWarning.style.display = '';
+    });
+}
+
+function showAlert(type, message) {
+    var alert = document.createElement('div');
+    alert.className = 'alert alert-' + type + ' alert-dismissible fade show';
+    alert.innerHTML = message +
+        '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+    document.querySelector('main').insertBefore(alert, document.querySelector('main').firstChild);
+}
+// Category select logic for create and upload modal (copied from pairlists)
+document.addEventListener('DOMContentLoaded', function() {
+    function setupCategorySelect(groupId, inputId) {
+        const group = document.getElementById(groupId);
+        const input = document.getElementById(inputId);
+        if (group && input) {
+            group.querySelectorAll('.category-select-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    input.value = btn.getAttribute('data-value');
+                });
+            });
+            // Set default active
+            group.querySelector('.category-select-btn[data-value="custom"]').classList.add('active');
+        }
+    }
+    setupCategorySelect('strategyCategoryGroup', 'newStrategyType');
+    setupCategorySelect('uploadStrategyCategoryGroup', 'uploadStrategyType');
+});
+</script>
+<style>
+    .category-filter-btn.active, .category-select-btn.active {
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        outline: 2px solid #fff;
+        font-weight: bold;
+    }
+    .category-select-btn.w-20 {
+        width: 25%;
+    }
+</style>
+{% endblock %}

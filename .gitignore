@@ -81,7 +81,7 @@ tmp/
 
 # FreqAI specific
 /user_data/models/*
-!/user_data/models/.gitkeep
+# !/user_data/models/.gitkeep
 /user_data/data/*
 !/user_data/data/.gitkeep
 

@@ -1,0 +1,180 @@
+<!-- Settings Modal -->
+<div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="settingsModalLabel"><i class="fas fa-cog"></i> Global Settings</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <form id="settingsForm">
+          <div class="mb-4 p-3 border rounded bg-light">
+            <div class="mb-2"><strong>Cloudflare Tunnel Options</strong></div>
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" id="cloudflareTunnel" name="cloudflare_tunnel_enabled" {% if settings and settings.cloudflare_tunnel_enabled %}checked{% endif %}>
+              <label class="form-check-label" for="cloudflareTunnel">
+                Enable Cloudflare Tunnel
+              </label>
+            </div>
+            <div id="cloudflareOptions" style="display: {% if settings and settings.cloudflare_tunnel_enabled %}block{% else %}none{% endif %};">
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="cloudflareAutoStart" name="cloudflare_tunnel_autostart" {% if settings and settings.cloudflare_tunnel_autostart %}checked{% endif %}>
+                <label class="form-check-label" for="cloudflareAutoStart">
+                  Start Tunnel automatically
+                </label>
+              </div>
+              <div id="tunnelControls">
+                <div class="d-flex align-items-center mb-2" id="tunnelStatusRow">
+                  <!-- Tunnel status and controls will be loaded by JS -->
+                </div>
+                <div id="tunnelUrlRow"></div>
+              </div>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">Save Settings</button>
+        </form>
+
+        <hr>
+        <h6>Other Persistent Settings (coming soon)</h6>
+        <p class="text-muted">More global options will appear here in future updates.</p>
+
+        <div id="settingsFeedback" class="mt-2"></div>
+        <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Show/hide tunnel controls and autostart based on enable checkbox
+    var tunnelCheckbox = document.getElementById('cloudflareTunnel');
+    function updateCloudflareOptionsVisibility() {
+      var opts = document.getElementById('cloudflareOptions');
+      if (tunnelCheckbox.checked) {
+        opts.style.display = 'block';
+      } else {
+        opts.style.display = 'none';
+      }
+    }
+    if (tunnelCheckbox) {
+      tunnelCheckbox.addEventListener('change', updateCloudflareOptionsVisibility);
+      updateCloudflareOptionsVisibility();
+    }
+    var form = document.getElementById('settingsForm');
+    if (form) {
+      form.onsubmit = function(e) {
+        e.preventDefault();
+        var tunnel = document.getElementById('cloudflareTunnel').checked;
+        var autostart = document.getElementById('cloudflareAutoStart').checked;
+        fetch('/options', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `cloudflare_tunnel_enabled=${tunnel ? 'on' : ''}&cloudflare_tunnel_autostart=${autostart ? 'on' : ''}`
+        })
+        .then(() => refreshTunnelStatus())
+        .catch(() => {
+          document.getElementById('settingsFeedback').innerHTML = '<div class="alert alert-danger">Failed to save settings.</div>';
+        });
+      };
+    }
+
+    // Tunnel control buttons
+    document.addEventListener('click', function(e) {
+      if (e.target && e.target.id === 'startTunnelBtn') {
+        fetch('/api/cloudflared/service', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'start' })
+        }).then(() => refreshTunnelStatus());
+      }
+      if (e.target && e.target.id === 'stopTunnelBtn') {
+        fetch('/api/cloudflared/service', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'stop' })
+        }).then(() => refreshTunnelStatus());
+      }
+      if (e.target && e.target.id === 'createTunnelBtn') {
+        fetch('/api/cloudflared/service', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create' })
+        }).then(() => refreshTunnelStatus());
+      }
+      if (e.target && e.target.id === 'copyTunnelUrlBtn') {
+        var url = document.getElementById('tunnelUrlLink').href;
+        navigator.clipboard.writeText(url);
+        document.getElementById('settingsFeedback').innerHTML = '<div class="alert alert-info">URL copied!</div>';
+        setTimeout(() => { document.getElementById('settingsFeedback').innerHTML = ''; }, 1500);
+      }
+    });
+
+    // Live status refresh
+    function refreshTunnelStatus() {
+      fetch('/api/cloudflared/service')
+        .then(resp => resp.json())
+        .then(data => {
+          // Consolidated status/action element
+          let status = data.status;
+          // Unified button/badge with fixed size, no wrap, color/text swap on hover
+          let statusText = '';
+          let actionText = '';
+          let statusClass = '';
+          let actionClass = '';
+          let actionId = '';
+          if (status === 'running') {
+            statusText = 'Running';
+            actionText = 'Stop';
+            statusClass = 'bg-success';
+            actionClass = 'btn-danger';
+            actionId = 'stopTunnelBtn';
+          } else if (status === 'stopped') {
+            statusText = 'Stopped';
+            actionText = 'Restart';
+            statusClass = 'bg-danger';
+            actionClass = 'btn-success';
+            actionId = 'startTunnelBtn';
+          } else {
+            statusText = 'Not Created';
+            actionText = 'Launch Container';
+            statusClass = 'bg-secondary';
+            actionClass = 'btn-primary';
+            actionId = 'createTunnelBtn';
+          }
+          // Fixed width for all states
+          let width = '180px';
+          let html = `
+            <strong>Cloudflare Tunnel Status:</strong>
+            <span class="ms-2 tunnel-status-action" style="display:inline-flex;align-items:center;justify-content:center;width:${width};vertical-align:middle;position:relative;">
+              <span class="tunnel-badge ${statusClass}" style="display:inline-block;width:${width};text-align:center;white-space:nowrap;padding:6px 0;border-radius:0.25rem;color:#fff;transition:background 0.2s;gap:0.5rem;">${statusText}</span>
+              <button class="tunnel-action-btn btn btn-sm ${actionClass}" id="${actionId}" style="display:none;width:${width};text-align:center;white-space:nowrap;padding:6px 0;margin-left:0;">${actionText}</button>
+            </span>
+          `;
+          document.getElementById('tunnelStatusRow').innerHTML = html;
+          // Add hover events
+          let wrapper = document.querySelector('.tunnel-status-action');
+          if (wrapper) {
+            wrapper.addEventListener('mouseenter', function() {
+              wrapper.querySelector('.tunnel-badge').style.display = 'none';
+              wrapper.querySelector('.tunnel-action-btn').style.display = 'inline-block';
+            });
+            wrapper.addEventListener('mouseleave', function() {
+              wrapper.querySelector('.tunnel-badge').style.display = 'inline-block';
+              wrapper.querySelector('.tunnel-action-btn').style.display = 'none';
+            });
+          }
+
+          // Update URL row
+          let urlHtml = '';
+          if (data.url) {
+            urlHtml = `<div class="alert alert-info mt-2 d-flex align-items-center"><div><strong>Public URL:</strong> <a href="${data.url}" target="_blank" id="tunnelUrlLink">${data.url}</a></div><button class="btn btn-outline-secondary btn-sm ms-2" id="copyTunnelUrlBtn" title="Copy URL"><i class="fas fa-copy"></i></button></div>`;
+          } else if (data.status === 'running') {
+            urlHtml = '<div class="alert alert-warning mt-2"><strong>Waiting for public URL...</strong></div>';
+          }
+          document.getElementById('tunnelUrlRow').innerHTML = urlHtml;
+        });
+    }
+
+    // Initial load
+    refreshTunnelStatus();
+  });
+        </script>
+      </div>
+    </div>
+  </div>
+</div>

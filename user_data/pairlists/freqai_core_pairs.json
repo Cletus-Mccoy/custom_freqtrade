@@ -1,0 +1,10 @@
+{
+    "pair_whitelist": [
+        "BTC/USDT:USDT",
+        "ETH/USDT:USDT",
+        "BNB/USDT:USDT",
+        "XRP/USDT:USDT",
+        "ADA/USDT:USDT",
+        "SOL/USDT:USDT"
+    ]
+}

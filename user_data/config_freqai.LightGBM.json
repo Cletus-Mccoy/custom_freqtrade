@@ -30,7 +30,7 @@
             "SOL/USDT:USDT",
             "DOT/USDT:USDT",
             "DOGE/USDT:USDT",
-            "XVG/USDT:USDT",
+            "AVAX/USDT:USDT",
             "LTC/USDT:USDT"
         ],
         "pair_blacklist": []
@@ -125,12 +125,12 @@
     "strategy": "FreqaiExampleStrategy",
     "db_url": "sqlite:////freqtrade/user_data/tradesv3.sqlite",
     "api_server": {
-            "enabled": true,
-            "listen_ip_address": "0.0.0.0",
-            "listen_port": 8080,
-            "verbosity": "error",
-            "enable_openapi": true,
-            "username": "freq",
-            "password": "abcdef"
-        }
+        "enabled": true,
+        "listen_ip_address": "0.0.0.0",
+        "listen_port": 8080,
+        "verbosity": "error",
+        "enable_openapi": true,
+        "username": "freq",
+        "password": "abcdef"
+    }
 }

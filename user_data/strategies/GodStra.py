@@ -1,178 +1,161 @@
-# GodStra Strategy
-# Author: @Mablue (Masoud Azizi)
-# github: https://github.com/mablue/
-# IMPORTANT:Add to your pairlists inside config.json (Under StaticPairList):
-#   {
-#       "method": "AgeFilter",
-#       "min_days_listed": 30
-#   },
-# IMPORTANT: INSTALL TA BEFOUR RUN(pip install ta)
-# IMPORTANT: Use Smallest "max_open_trades" for getting best results inside config.json
-
-# --- Do not remove these libs ---
-import logging
+# --- GodStra.py ---
+from freqtrade.strategy.interface import IStrategy
+from freqtrade.strategy import CategoricalParameter, IntParameter, RealParameter
+from pandas import DataFrame
+import talib.abstract as ta
+import pandas as pd
+import numpy as np
 from functools import reduce
 
-import freqtrade.vendor.qtpylib.indicators as qtpylib
-import numpy as np
-# Add your lib to import here
-# import talib.abstract as ta
-import pandas as pd
-from freqtrade.strategy import IStrategy
-from numpy.lib import math
-from pandas import DataFrame
-# import talib.abstract as ta
-from ta import add_all_ta_features
-from ta.utils import dropna
-
-# --------------------------------
-
-
-
 class GodStra(IStrategy):
-    # 5/66:      9 trades. 8/0/1 Wins/Draws/Losses. Avg profit  21.83%. Median profit  35.52%. Total profit  1060.11476586 USDT ( 196.50Σ%). Avg duration 3440.0 min. Objective: -7.06960
-    # +--------+---------+----------+------------------+--------------+-------------------------------+----------------+-------------+
-    # |   Best |   Epoch |   Trades |    Win Draw Loss |   Avg profit |                        Profit |   Avg duration |   Objective |
-    # |--------+---------+----------+------------------+--------------+-------------------------------+----------------+-------------|
-    # | * Best |   1/500 |       11 |      2    1    8 |        5.22% |  280.74230393 USDT   (57.40%) |      2,421.8 m |    -2.85206 |
-    # | * Best |   2/500 |       10 |      7    0    3 |       18.76% |  983.46414442 USDT  (187.58%) |        360.0 m |    -4.32665 |
-    # | * Best |   5/500 |        9 |      8    0    1 |       21.83% | 1,060.11476586 USDT  (196.50%) |      3,440.0 m |     -7.0696 |
-
-    INTERFACE_VERSION: int = 3
-    # Buy hyperspace params:
-    buy_params = {
-        'buy-cross-0': 'volatility_kcc',
-        'buy-indicator-0': 'trend_ichimoku_base',
-        'buy-int-0': 42,
-        'buy-oper-0': '<R',
-        'buy-real-0': 0.06295
-    }
-
-    # Sell hyperspace params:
-    sell_params = {
-        'sell-cross-0': 'volume_mfi',
-        'sell-indicator-0': 'trend_kst_diff',
-        'sell-int-0': 98,
-        'sell-oper-0': '=R',
-        'sell-real-0': 0.8779
-    }
-
-    # ROI table:
-    minimal_roi = {
-        "0": 0.3556,
-        "4818": 0.21275,
-        "6395": 0.09024,
-        "22372": 0
-    }
-
-    # Stoploss:
-    stoploss = -0.34549
-
-    # Trailing stop:
-    trailing_stop = True
-    trailing_stop_positive = 0.22673
-    trailing_stop_positive_offset = 0.2684
-    trailing_only_offset_is_reached = True
-    # Buy hypers
+    # --- Basisconfig ---
     timeframe = '12h'
-    print('Add {\n\t"method": "AgeFilter",\n\t"min_days_listed": 30\n},\n to your pairlists in config (Under StaticPairList)')
+    startup_candle_count = 240
 
-    def dna_size(self, dct: dict):
-        def int_from_str(st: str):
-            str_int = ''.join([d for d in st if d.isdigit()])
-            if str_int:
-                return int(str_int)
-            return -1  # in case if the parameter somehow doesn't have index
-        return len({int_from_str(digit) for digit in dct.keys()})
+    # Hyperopt parameters
+    # Buy parameters
+    buy_ema_short = IntParameter(10, 50, default=21, space="buy", optimize=True)
+    buy_ema_long = IntParameter(50, 200, default=100, space="buy", optimize=True)
+    buy_rsi_lower = IntParameter(20, 40, default=30, space="buy", optimize=True)  # RSI oversold threshold
+    buy_rsi_upper = IntParameter(50, 70, default=60, space="buy", optimize=True)  # RSI upper limit for buying
+    buy_volume_check = CategoricalParameter([True, False], default=True, space="buy", optimize=True)
+    
+    # Sell parameters
+    sell_ema_short = IntParameter(10, 50, default=21, space="sell", optimize=True)
+    sell_ema_long = IntParameter(50, 200, default=100, space="sell", optimize=True)
+    sell_rsi_lower = IntParameter(50, 70, default=60, space="sell", optimize=True)  # RSI lower limit for selling
+    sell_rsi_upper = IntParameter(70, 90, default=80, space="sell", optimize=True)  # RSI overbought threshold
+    sell_volume_check = CategoricalParameter([True, False], default=True, space="sell", optimize=True)
 
+    # ROI hyperopt
+    minimal_roi = {
+        "0": 0.02,
+        "240": 0.01,
+        "720": 0
+    }
+
+    # Stoploss hyperopt
+    stoploss = -0.06
+
+    trailing_stop = True
+    trailing_stop_positive = 0.004
+    trailing_stop_positive_offset = 0.008
+    trailing_only_offset_is_reached = True
+
+    process_only_new_candles = True
+    use_custom_stoploss = False
+
+    order_types = {
+        'entry': 'limit',
+        'exit': 'limit',
+        'stoploss': 'limit',
+        'stoploss_on_exchange': False
+    }
+
+    order_time_in_force = {
+        'entry': 'GTC',
+        'exit': 'GTC'
+    }
+
+    # --- Indicatoren berekenen ---
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        # Add all ta features
-        dataframe = dropna(dataframe)
-        dataframe = add_all_ta_features(
-            dataframe, open="open", high="high", low="low", close="close", volume="volume",
-            fillna=True)
-        # dataframe.to_csv("df.csv", index=True)
+        if dataframe.empty:
+            return dataframe
+
+        # Dynamic EMAs based on hyperopt parameters
+        dataframe['ema_short_buy'] = ta.EMA(dataframe['close'], timeperiod=self.buy_ema_short.value)
+        dataframe['ema_long_buy'] = ta.EMA(dataframe['close'], timeperiod=self.buy_ema_long.value)
+        dataframe['ema_short_sell'] = ta.EMA(dataframe['close'], timeperiod=self.sell_ema_short.value)
+        dataframe['ema_long_sell'] = ta.EMA(dataframe['close'], timeperiod=self.sell_ema_long.value)
+        
+        # RSI
+        dataframe['rsi'] = ta.RSI(dataframe['close'], timeperiod=14)
+        
+        # Volume indicators
+        dataframe['volume_sma'] = ta.SMA(dataframe['volume'], timeperiod=20)
+        dataframe['volume_ratio'] = dataframe['volume'] / dataframe['volume_sma']
+        
+        # Additional indicators for better signals
+        dataframe['macd'], dataframe['macdsignal'], dataframe['macdhist'] = ta.MACD(dataframe['close'])
+        dataframe['bb_upperband'], dataframe['bb_middleband'], dataframe['bb_lowerband'] = ta.BBANDS(dataframe['close'])
+        
+        # Momentum indicators
+        dataframe['mom'] = ta.MOM(dataframe['close'], timeperiod=10)
+        dataframe['atr'] = ta.ATR(dataframe['high'], dataframe['low'], dataframe['close'], timeperiod=14)
+
+        # Fill NaN values
+        dataframe.fillna(0, inplace=True)
+        
         return dataframe
 
+    # --- Entry logic (modern FreqTrade) ---
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        conditions = list()
-        # /5: Cuz We have 5 Group of variables inside buy_param
-        for i in range(self.dna_size(self.buy_params)):
+        if dataframe.empty:
+            return dataframe
 
-            OPR = self.buy_params[f'buy-oper-{i}']
-            IND = self.buy_params[f'buy-indicator-{i}']
-            CRS = self.buy_params[f'buy-cross-{i}']
-            INT = self.buy_params[f'buy-int-{i}']
-            REAL = self.buy_params[f'buy-real-{i}']
-            DFIND = dataframe[IND]
-            DFCRS = dataframe[CRS]
-
-            if OPR == ">":
-                conditions.append(DFIND > DFCRS)
-            elif OPR == "=":
-                conditions.append(np.isclose(DFIND, DFCRS))
-            elif OPR == "<":
-                conditions.append(DFIND < DFCRS)
-            elif OPR == "CA":
-                conditions.append(qtpylib.crossed_above(DFIND, DFCRS))
-            elif OPR == "CB":
-                conditions.append(qtpylib.crossed_below(DFIND, DFCRS))
-            elif OPR == ">I":
-                conditions.append(DFIND > INT)
-            elif OPR == "=I":
-                conditions.append(DFIND == INT)
-            elif OPR == "<I":
-                conditions.append(DFIND < INT)
-            elif OPR == ">R":
-                conditions.append(DFIND > REAL)
-            elif OPR == "=R":
-                conditions.append(np.isclose(DFIND, REAL))
-            elif OPR == "<R":
-                conditions.append(DFIND < REAL)
-
-        print(conditions)
-        dataframe.loc[
-            reduce(lambda x, y: x & y, conditions),
-            'enter_long'] = 1
+        conditions = []
+        
+        # EMA Uptrend condition - short EMA above long EMA (bullish)
+        conditions.append(dataframe['ema_short_buy'] > dataframe['ema_long_buy'])
+        
+        # RSI condition - not overbought, but above oversold
+        # Buy when RSI is between oversold recovery and not yet overbought
+        conditions.append(
+            (dataframe['rsi'] > self.buy_rsi_lower.value) & 
+            (dataframe['rsi'] < self.buy_rsi_upper.value)
+        )
+        
+        # Volume condition (if enabled) - higher than average volume
+        if self.buy_volume_check.value:
+            conditions.append(dataframe['volume_ratio'] > 1.0)
+        
+        # MACD bullish condition - MACD above signal line
+        conditions.append(dataframe['macd'] > dataframe['macdsignal'])
+        
+        # Additional confirmation - price above middle Bollinger Band (bullish)
+        conditions.append(dataframe['close'] > dataframe['bb_middleband'])
+        
+        # Combine all conditions
+        if conditions:
+            dataframe.loc[
+                reduce(lambda x, y: x & y, conditions),
+                'enter_long'
+            ] = 1
 
         return dataframe
 
+    # --- Exit logic (modern FreqTrade) ---
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        conditions = list()
-        for i in range(self.dna_size(self.sell_params)):
-            OPR = self.sell_params[f'sell-oper-{i}']
-            IND = self.sell_params[f'sell-indicator-{i}']
-            CRS = self.sell_params[f'sell-cross-{i}']
-            INT = self.sell_params[f'sell-int-{i}']
-            REAL = self.sell_params[f'sell-real-{i}']
-            DFIND = dataframe[IND]
-            DFCRS = dataframe[CRS]
+        if dataframe.empty:
+            return dataframe
 
-            if OPR == ">":
-                conditions.append(DFIND > DFCRS)
-            elif OPR == "=":
-                conditions.append(np.isclose(DFIND, DFCRS))
-            elif OPR == "<":
-                conditions.append(DFIND < DFCRS)
-            elif OPR == "CA":
-                conditions.append(qtpylib.crossed_above(DFIND, DFCRS))
-            elif OPR == "CB":
-                conditions.append(qtpylib.crossed_below(DFIND, DFCRS))
-            elif OPR == ">I":
-                conditions.append(DFIND > INT)
-            elif OPR == "=I":
-                conditions.append(DFIND == INT)
-            elif OPR == "<I":
-                conditions.append(DFIND < INT)
-            elif OPR == ">R":
-                conditions.append(DFIND > REAL)
-            elif OPR == "=R":
-                conditions.append(np.isclose(DFIND, REAL))
-            elif OPR == "<R":
-                conditions.append(DFIND < REAL)
-
-        dataframe.loc[
-            reduce(lambda x, y: x & y, conditions),
-            'exit_long'] = 1
+        conditions = []
+        
+        # EMA Downtrend condition - short EMA below long EMA (bearish)
+        conditions.append(dataframe['ema_short_sell'] < dataframe['ema_long_sell'])
+        
+        # RSI condition - sell when overbought or approaching overbought
+        # Sell when RSI is above the lower threshold and potentially overbought
+        conditions.append(
+            (dataframe['rsi'] > self.sell_rsi_lower.value) | 
+            (dataframe['rsi'] > self.sell_rsi_upper.value)
+        )
+        
+        # Volume condition (if enabled) - lower volume might indicate weakening trend
+        if self.sell_volume_check.value:
+            conditions.append(dataframe['volume_ratio'] < 0.8)
+        
+        # MACD bearish condition - MACD below signal line
+        conditions.append(dataframe['macd'] < dataframe['macdsignal'])
+        
+        # Additional confirmation - price below middle Bollinger Band (bearish)
+        conditions.append(dataframe['close'] < dataframe['bb_middleband'])
+        
+        # Combine all conditions
+        if conditions:
+            dataframe.loc[
+                reduce(lambda x, y: x & y, conditions),
+                'exit_long'
+            ] = 1
 
         return dataframe

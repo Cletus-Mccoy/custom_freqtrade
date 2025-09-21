@@ -1,0 +1,16 @@
+{
+  "categories": [
+    "custom",
+    "freqai",
+    "example",
+    "test",
+    "azrazr"
+  ],
+  "category_colors": {
+    "custom": "#198754",
+    "freqai": "#0dcaf0",
+    "example": "#ffc107",
+    "test": "#c757d3",
+    "azrazr": "#6c757d"
+  }
+}
