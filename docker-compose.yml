@@ -1,193 +1,202 @@
-services:
-    freqtrade_OG_LightGBM:
-      image: freqtradeorg/freqtrade:stable_freqai
-      restart: always
-      container_name: freqtrade_OG_LightGBM
-      runtime: nvidia
-      environment:
-        - NVIDIA_VISIBLE_DEVICES=all
-        - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
-      volumes:
-        - userdata_OG_LightGBM:/freqtrade/user_data
-        - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json
-        - ./user_data/strategies/FreqaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
-      command: >
-        trade
-        --config /freqtrade/user_data/config.json
-        --strategy FreqaiExampleStrategy
-        --freqaimodel LightGBMRegressor
-        --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-        --strategy-path /freqtrade/user_data/strategies
-      ports:
-        - "0.0.0.0:8080:8080"
-      networks:
-        - freqnet
-
-    freqtrade_OG_LightGBM_Inverted:
-      image: freqtradeorg/freqtrade:stable_freqai
-      restart: always
-      container_name: freqtrade_OG_LightGBM_Inverted
-      runtime: nvidia
-      environment:
-        - NVIDIA_VISIBLE_DEVICES=all
-        - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
-      volumes:
-        - userdata_OG_LightGBM_Inverted:/freqtrade/user_data
-        - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json
-        - ./user_data/strategies/FreqaiExampleStrategy_Inverted.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
-      command: >
-        trade
-        --config /freqtrade/user_data/config.json
-        --strategy FreqaiExampleStrategy
-        --freqaimodel LightGBMRegressor
-        --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-        --strategy-path /freqtrade/user_data/strategies
-      ports:
-        - "0.0.0.0:8081:8080"
-      networks:
-        - freqnet
-
-    # freqtrade_OG_Catboost:
-    #   image: freqtradeorg/freqtrade:stable_freqaitorch
-    #   restart: always
-    #   container_name: freqtrade_OG_Catboost
-    #   deploy:
-    #     resources:
-    #       reservations:
-    #         devices:
-    #           - driver: nvidia
-    #             count: 1
-    #             capabilities: [gpu]
-    #   volumes:
-    #     - userdata_OG_Catboost:/freqtrade/user_data
-    #     - ./user_data/config_freqai.Catboost.json:/freqtrade/user_data/config.json
-    #     - ./user_data/strategies/FreqaiExampleStrategy.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
-    #   command: >
-    #     trade
-    #     --config /freqtrade/user_data/config.json
-    #     --strategy FreqaiExampleStrategy
-    #     --freqaimodel CatboostRegressor
-    #     --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-    #     --strategy-path /freqtrade/user_data/strategies
-    #   ports:
-    #     - "0.0.0.0:8081:8080"
-    #   networks:
-    #     - freqnet
-
-    # freqtrade_filterEMA:
-    #   image: freqtradeorg/freqtrade:stable_freqaitorch
-    #   restart: always
-    #   container_name: freqtrade_filterEMA
-    #   deploy:
-    #     resources:
-    #       reservations:
-    #         devices:
-    #           - driver: nvidia
-    #             count: 1
-    #             capabilities: [gpu]
-    #   volumes:
-    #     - userdata_filterEMA:/freqtrade/user_data
-    #     - ./user_data/config_freqai.FilterEMA.json:/freqtrade/user_data/config.json
-    #     - ./user_data/strategies/FreqaiExampleStrategy_FilterEMA.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_FilterEMA.py
-    #   command: >
-    #     trade
-    #     --config /freqtrade/user_data/config.json
-    #     --strategy FreqaiExampleStrategy_FilterEMA
-    #     --freqaimodel LightGBMRegressor
-    #     --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-    #     --strategy-path /freqtrade/user_data/strategies
-    #   ports:
-    #     - "0.0.0.0:8082:8080"
-    #   networks:
-    #     - freqnet
-
-    # freqtrade_Classification:
-    #     image: freqtradeorg/freqtrade:stable_freqaitorch
-    #     restart: always
-    #     container_name: freqtrade_Classification
-    #     deploy:
-    #       resources:
-    #         reservations:
-    #           devices:
-    #             - driver: nvidia
-    #               count: 1
-    #               capabilities: [gpu]
-    #     volumes:
-    #       - userdata_classification:/freqtrade/user_data
-    #       - ./user_data/config_freqai.Classification.json:/freqtrade/user_data/config.json
-    #       - ./user_data/strategies/FreqaiExampleStrategy_Classification.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy_Classification.py
-
-    #     command: >
-    #       trade
-    #       --config /freqtrade/user_data/config.json
-    #       --strategy FreqaiExampleStrategy_Classification
-    #       --freqaimodel CatboostClassifier
-    #       --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-    #       --strategy-path /freqtrade/user_data/strategies
-    #     ports:
-    #       - "0.0.0.0:8083:8080"
-    #     networks:
-    #       - freqnet
-
 networks:
   freqnet:
     driver: bridge
+  freqtrade_network:
+    driver: bridge
+    
+services:
+
+  freqtrade_ichiV1:
+    command: 'trade --config /freqtrade/user_data/config.json --strategy ichiV1 --freqaimodel LightGBMRegressor --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+      --strategy-path /freqtrade/user_data/strategies'
+    container_name: freqtrade_ichiV1
+    image: freqtradeorg/freqtrade:stable_freqai
+    networks:
+    - freqnet
+    ports:
+    - 8086:8080
+    restart: always
+    volumes:
+    - userdata_OG_LightGBM:/freqtrade/user_data
+    - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json
+    - ./user_data/strategies/ichiV1_Inverted.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
+    
+  # freqtrade_FastGPUExample:
+  #   image: freqtradeorg/freqtrade:stable_freqai
+  #   container_name: freqtrade_FastGPUExample
+  #   restart: always
+  #   runtime: nvidia
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   environment:
+  #     - NVIDIA_VISIBLE_DEVICES=all
+  #     - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+  #   networks:
+  #     - freqnet
+  #   ports:
+  #     - "8087:8080"  
+  #   volumes:
+  #     - userdata_FastGPUExample:/freqtrade/user_data
+  #     - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json:ro
+  #     - ./user_data/strategies/FastGPUExample.py:/freqtrade/user_data/strategies/FastGPUExample.py:ro
+  #   command: >
+  #     trade
+  #     --config /freqtrade/user_data/config.json
+  #     --strategy FastGPUExample
+  #     --freqaimodel LightGBMRegressor
+  #     --db-url sqlite:////freqtrade/user_data/trade.db
+  #     --strategy-path /freqtrade/user_data/strategies
+
+#   freqtrade_GodStra:
+#     image: freqtradeorg/freqtrade:stable_freqai
+#     container_name: freqtrade_GodStra
+#     restart: always
+#     networks:
+#       - freqnet
+#     ports:
+#       - "8088:8080"  
+#     volumes:
+#       - userdata_GodStra:/freqtrade/user_data
+#       - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json:ro
+#       - ./user_data/strategies/GodStra.py:/freqtrade/user_data/strategies/GodStra.py:ro
+#     command: >
+#       trade
+#       --config /freqtrade/user_data/config.json
+#       --strategy GodStra
+#       --freqaimodel LightGBMRegressor
+#       --db-url sqlite:////freqtrade/user_data/trade.db
+#       --strategy-path /freqtrade/user_data/strategies
+
+#   freqtrade_HiWin:
+#     image: freqtradeorg/freqtrade:stable_freqai
+#     container_name: freqtrade_HiWin
+#     restart: always
+#     networks:
+#       - freqnet
+#     ports:
+#       - "8089:8080"  
+#     volumes:
+#       - userdata_HiWin:/freqtrade/user_data
+#       - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json:ro
+#       - ./user_data/strategies/HiWin.py:/freqtrade/user_data/strategies/HiWin.py:ro
+#     command: >
+#       trade
+#       --config /freqtrade/user_data/config.json
+#       --strategy HiWin
+#       --freqaimodel LightGBMRegressor
+#       --db-url sqlite:////freqtrade/user_data/trade.db
+#       --strategy-path /freqtrade/user_data/strategies
+      
+#   freqtrade_newstrategy_modify_support_ft:
+#     image: freqtradeorg/freqtrade:stable_freqai
+#     container_name: freqtrade_newstrategy_modify_support_f
+#     restart: always
+#     networks:
+#       - freqnet
+#     ports:
+#       - "8090:8080"  
+#     volumes:
+#       - userdata_newstrategy_modify_support_ft:/freqtrade/user_data
+#       - ./user_data/config_freqai.FilterEMA.json:/freqtrade/user_data/config.json:ro
+#       - ./user_data/strategies/newstrategy_modify_support_ft.py:/freqtrade/user_data/strategies/newstrategy_modify_support_ft.py:ro
+#     command: >
+#       trade
+#       --config /freqtrade/user_data/config.json
+#       --strategy newstrategy_modify_support_ft
+#       --freqaimodel LightGBMRegressor
+#       --db-url sqlite:////freqtrade/user_data/trade.db
+#       --strategy-path /freqtrade/user_data/strategies
+      
+#   freqtrade_E0V1E_20231017_1059:
+#     image: freqtradeorg/freqtrade:latest
+#     container_name: freqtrade_E0V1E_20231017_1059
+#     restart: always
+#     networks:
+#       - freqnet
+#     ports:  
+#       - "8091:8080" 
+#     volumes:
+#       - userdata_E0V1E_20231017_1059:/freqtrade/user_data
+#       - ./user_data/config_freqai.FilterEMA.json:/freqtrade/user_data/config.json:ro
+#       - ./user_data/strategies/E0V1E_20231017_1059.py:/freqtrade/user_data/strategies/E0V1E_20231017_1059.py:ro
+#     command: >
+#       trade
+#       --config /freqtrade/user_data/config.json
+#       --strategy E0V1E_20231017_1059
+#       --freqaimodel CatboostRegressor
+#       --db-url sqlite:////freqtrade/user_data/trade.db
+#       --strategy-path /freqtrade/user_data/strategies
+      
+#   freqtrade_ElliotV5_SMA:
+#     image: freqtradeorg/freqtrade:stable_freqai
+#     container_name: freqtrade_ElliotV5_SMA
+#     restart: always
+#     networks:
+#       - freqnet
+#     ports:  
+#       - "8092:8080" 
+#     volumes:
+#       - userdata_ElliotV5_SMA:/freqtrade/user_data
+#       - ./user_data/config_freqai.LightGBM.json:/freqtrade/user_data/config.json:ro
+#       - ./user_data/strategies/ElliotV5_SMA.py:/freqtrade/user_data/strategies/ElliotV5_SMA.py:ro
+#     command: >
+#       trade
+#       --config /freqtrade/user_data/config.json
+#       --freqaimodel LightGBMRegressor
+#       --strategy ElliotV5_SMA
+#       --db-url sqlite:////freqtrade/user_data/trade.db
+#       --strategy-path /freqtrade/user_data/strategies
+  
+#   freqtrade_Binance:
+#     image: freqtradeorg/freqtrade:stable_freqai
+#     container_name: freqtrade_Binance
+#     restart: always
+#     networks:
+#       - freqnet
+#     ports:  
+#       - "8093:8080" 
+#     volumes:
+#       - userdata_binance:/freqtrade/user_data
+#       - ./user_data/config_freqai.FilterEMA.json:/freqtrade/user_data/config.json:ro
+#       - ./user_data/strategies/binance.py:/freqtrade/user_data/strategies/binance.py:ro
+#     command: >
+#       trade
+#       --config /freqtrade/user_data/config.json
+#       --freqaimodel LightGBMRegressor
+#       --strategy binance
+#       --db-url sqlite:////freqtrade/user_data/trade.db
+#       --strategy-path /freqtrade/user_data/strategies
+      
+#   freqtrade_ichiV1_fixed:
+#     command: 'trade --config /freqtrade/user_data/config.json --strategy ichiV1 --freqaimodel --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+#       --strategy-path /freqtrade/user_data/strategies'
+#     container_name: freqtrade_ichiV1_fixed
+#     image: freqtradeorg/freqtrade:latest
+#     networks:
+#     - freqnet
+#     ports:
+#     - 8095:8080
+#     restart: always
+#     volumes:
+#     - userdata_ichiV1_fixed:/freqtrade/user_data
+#     - ./user_data/config.json.old:/freqtrade/user_data/config.json
+#     - ./user_data/strategies/ichiV1_fixed.py:/freqtrade/user_data/strategies/FreQaiExampleStrategy.py
+
+
 
 volumes:
-  userdata_OG_LightGBM:
-  userdata_OG_LightGBM_Inverted:
-  userdata_OG_Catboost:
-  userdata_filterEMA:
-  userdata_classification:
-        
-
-    # tensorboard:
-    #     image: freqtradeorg/freqtrade:stable_freqaitorch
-    #     container_name: tensorboard
-    #     volumes:
-    #       - ./freqtrade/ichiv1/user_data:/freqtrade/user_data
-    #     #network_mode: "host"
-    #     ports:
-    #       - "9060:9060"
-    #     # Default command used when running `docker compose up` --bind_all
-    #     entrypoint: tensorboard
-    #     command: >
-    #       --bind_all
-    #       --port 9060
-    #       --logdir /freqtrade/user_data/models
-
-    # plot:
-    #   image: freqtradeorg/freqtrade:stable_plot
-    #   container_name: freqtrade_plot
-    #   volumes:
-    #     - ./freqtrade/ichiv1/user_data:/freqtrade/user_data
-    #   # Expose api on port 8080 (localhost only)
-    #   # Please read the https://www.freqtrade.io/en/stable/rest-api/ documentation
-    #   # before enabling this.
-    #   ports:
-    #     - "127.0.0.1:8082:8080"
-    #   # Default command used when running `docker compose up`
-    #   command: >
-    #     trade
-    #     --logfile /freqtrade/user_data/logs/freqtrade.log
-    #     --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
-    #     --config /freqtrade/user_data/config_freqai.json
-    #     --strategy-path /freqtrade/user_data/strategies
-    #     --strategy ichiv1
-
-
-
+  userdata_OG_LightGBM: null
+#   userdata_FastGPUExample: null
+#   userdata_GodStra: null
+#   userdata_HiWin: null
+#   userdata_newstrategy_modify_support_ft: null
+#   userdata_E0V1E_20231017_1059: null
+#   userdata_ElliotV5_SMA: null
+#   userdata_binance: null
+#   userdata_ichiV1_fixed: null
+  
