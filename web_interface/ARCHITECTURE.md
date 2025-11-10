@@ -2069,7 +2069,7 @@ web_interface/
 
 ---
 
-### [A-1.20] Integrate CategoryManager in App Routes (Status: In-Progress)
+### [A-1.20] Integrate CategoryManager in App Routes (Status: Done)
 
 **Date (UTC):** 2025-11-10 00:30  
 **Owner:** Copilot  
@@ -2114,11 +2114,11 @@ web_interface/
 
 **Rollback:** 
 ```powershell
-git revert <commit-hash>
+git revert 475c2e6
 # CategoryManager utility remains, app.py reverts to original
 ```
 
-**Commit:** `<TBD - will update after commit>`
+**Commit:** `475c2e6`
 
 **Notes:** 
 - First real integration of CategoryManager utility
