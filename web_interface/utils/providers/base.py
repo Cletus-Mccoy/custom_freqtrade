@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from ..category_manager import category_manager
-from ..logger import logger
+from ..category_manager import CategoryManager
+from ..logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class FileResourceProvider(ABC):
@@ -31,10 +33,28 @@ class FileResourceProvider(ABC):
     - _get_resource_type(): Return resource type string for CategoryManager
     """
 
-    def __init__(self):
-        """Initialize provider with resource-specific paths."""
+    def __init__(self, category_manager: Optional[CategoryManager] = None):
+        """
+        Initialize provider with resource-specific paths.
+        
+        Args:
+            category_manager: Optional CategoryManager instance. If not provided,
+                            a default instance will be created using standard config path.
+        """
         self.resource_path = self._get_resource_path()
         self.resource_type = self._get_resource_type()
+        
+        # Create or use provided CategoryManager
+        if category_manager is None:
+            # Try to find config in standard location
+            base_path = Path(__file__).parent.parent.parent
+            config_path = base_path / "web_interface" / "config" / "user_config.json"
+            if not config_path.exists():
+                # Fallback for different directory structures
+                config_path = base_path / "config" / "user_config.json"
+            self.category_manager = CategoryManager(config_path)
+        else:
+            self.category_manager = category_manager
 
     @abstractmethod
     def _get_resource_path(self) -> Path:
@@ -93,7 +113,7 @@ class FileResourceProvider(ABC):
         """
         # Get categories from CategoryManager for color lookup
         categories = {cat['name']: cat.get('color', '#6c757d')
-                     for cat in category_manager.get_categories(self.resource_type)}
+                     for cat in self.category_manager.get_categories(self.resource_type)}
 
         resources = []
         if self.resource_path.exists():
@@ -112,7 +132,7 @@ class FileResourceProvider(ABC):
                             data = json.load(f)
 
                     # Get category from CategoryManager
-                    category = category_manager.get_file_category(self.resource_type, file_path.name)
+                    category = self.category_manager.get_file_category(self.resource_type, file_path.name)
                     color = categories.get(category, '#6c757d')
 
                     # Build resource entry
@@ -190,7 +210,7 @@ class FileResourceProvider(ABC):
 
             # Update category in CategoryManager if provided
             if 'category' in data:
-                category_manager.set_file_category(self.resource_type, filename, data['category'])
+                self.category_manager.set_file_category(self.resource_type, filename, data['category'])
 
             return True
 
@@ -261,7 +281,7 @@ class FileResourceProvider(ABC):
 
             # Set category for cloned file if provided
             if data and 'category' in data:
-                category_manager.set_file_category(self.resource_type, target_filename, data['category'])
+                self.category_manager.set_file_category(self.resource_type, target_filename, data['category'])
 
             return True
 
