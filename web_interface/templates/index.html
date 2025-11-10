@@ -178,8 +178,8 @@ function loadDashboardData() {
 
 // Identify management containers (customize as needed)
 function isManagementContainer(container) {
-    // Example: cloudflared, traefik, nginx, etc. Add more as needed
-    const mgmtNames = ['cloudflared', 'traefik', 'nginx', 'watchtower', 'portainer'];
+    // Example: traefik, nginx, etc. Add more as needed
+    const mgmtNames = ['traefik', 'nginx', 'watchtower', 'portainer'];
     return mgmtNames.some(name => (container.name || '').toLowerCase().includes(name));
 }
 
