@@ -2324,7 +2324,7 @@ git revert <commit-hash>
 # Removes provider implementations, keeps base class
 ```
 
-**Commit:** `<TBD>`
+**Commit:** `ddaeeee`
 
 **Notes:**
 - All providers tested with existing file structures
