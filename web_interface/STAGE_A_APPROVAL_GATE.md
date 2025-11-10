@@ -220,12 +220,12 @@ logger.error(f"Error: {e}")
 - [ ] Clone/Delete operations functional
 
 **Pairlists Tab (`/pairlists`):**
-- [ ] Pairlist files list correctly
-- [ ] Category filters work (dynamic from config)
-- [ ] Create/Edit/Clone/Upload modals functional
-- [ ] View mode shows active category, others greyed
-- [ ] Edit mode all buttons interactive
-- [ ] Category settings modal saves correctly
+- [x] Pairlist files list correctly
+- [x] Category filters work (dynamic from config)
+- [x] Create/Edit/Clone/Upload modals functional
+- [x] View mode shows active category, others greyed
+- [x] Edit mode all buttons interactive
+- [x] Category settings modal saves correctly
 
 **Configs Tab (`/configs`):**
 - [ ] Config files list correctly
