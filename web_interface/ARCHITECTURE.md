@@ -2066,6 +2066,131 @@ web_interface/
 
 ---
 
+### [A-5.10] Fix Category System Dynamic Loading & Save Format (Status: In-Progress)
+
+**Date (UTC):** 2025-11-10 03:30  
+**Owner:** Copilot  
+**Scope:** `static/js/services/category.service.js`, `templates/pairlists.html`, `static/js/pages/pairlists.js`
+
+**Rationale:** **USER-REPORTED ISSUE:** Category system has two critical bugs:
+1. **Save Format Bug:** `CategoryManager.saveCategories()` sends wrong JSON structure `{pairlist_categories, pairlist_file_categories}` but backend expects `{pairlists: {categories, file_categories}}` per user_config.json format
+2. **Hardcoded Modal Buttons:** Category selection buttons in Create/Edit/Clone/Upload modals are hardcoded HTML (lines 214-218, 271-275, 388-392, 444-448) instead of dynamically loaded from user_config.json like filter buttons
+
+These bugs break the unified category management system established in A-1.10/A-1.20.
+
+**Current Issues:**
+- ❌ Saving categories fails silently (wrong JSON keys)
+- ❌ Modal buttons don't reflect custom categories from settings
+- ❌ Hardcoded buttons show old/wrong category lists
+- ❌ No color synchronization between filters and modal buttons
+
+**Steps:**
+1. Fix `CategoryManager.saveCategories()` in category.service.js:
+   - Change from: `{pairlist_categories, pairlist_file_categories}`
+   - Change to: `{pairlists: {categories, file_categories}}`
+2. Add `renderCategorySelectButtons(containerId, selectedCategory)` method to CategoryManager
+3. Replace 4 hardcoded button groups in pairlists.html with `<div>` containers with IDs
+4. Call `renderCategorySelectButtons()` in modal show events (pairlists.js)
+5. Update button click handlers to work with dynamic buttons
+6. Test: Create category in settings → should appear in all modals
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Check modal buttons are no longer hardcoded
+  Select-String -Pattern 'btn btn-success category-select-btn w-20.*data-value="custom"' -Path templates/pairlists.html
+  # Should return 0 matches (all replaced with dynamic containers)
+  
+  # Test category system end-to-end
+  # 1. Add new category "testing" with color #ff00ff in settings modal
+  # 2. Create new pairlist → should see "testing" button in modal
+  # 3. Select "testing" and save → should persist in user_config.json
+  # 4. Reload page → pairlist should show "testing" category
+  ```
+- **Criteria:**
+  - ✅ saveCategories() sends correct JSON structure matching user_config.json
+  - ✅ Modal buttons dynamically rendered from user_config.json
+  - ✅ Custom categories appear in all 4 modals (Create/Edit/Clone/Upload)
+  - ✅ Colors match between filter buttons and modal buttons
+  - ✅ Category selection persists correctly in file_categories
+  - ✅ No hardcoded category buttons remain in HTML
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# Restores hardcoded buttons and old save format
+```
+
+**Commit:** `<TBD - will bundle with A-3.20>`
+
+**Notes:** 
+- This fixes the last major Stage A issue blocking approval gate
+- Makes pairlist category system fully dynamic and user-configurable
+- Paves way for strategies/configs to adopt same pattern in Stage C
+- After this: Stage A is complete and ready for approval gate verification
+
+---
+
+### [A-3.20] Complete Logger Migration for Docker Operations (Status: Done)
+
+**Date (UTC):** 2025-11-10 03:00  
+**Owner:** Copilot  
+**Scope:** `app.py` (~30-40 print statements in Docker service operations)
+**Commit:** `<TBD>`
+
+**Rationale:** Action A-3.10 created the logging infrastructure and replaced startup/initialization print statements with structured logging. However, approximately 30-40 print() statements remained in Docker service operations (start/stop/restart methods, lines ~1770-1925). These print statements needed to be converted to logger calls to complete the Stage A logging migration and provide consistent structured logging throughout the application.
+
+**Completed Replacements:**
+- Line 1772: `print(f"Docker service addition result...")` → `logger.info(...)`
+- Lines 1803, 1820: Success messages → `logger.info()`
+- Lines 1806, 1823, 1853, 1856, etc.: Failure messages → `logger.error()`
+- Lines 1831, 1858, 1877, etc.: Timeout messages → `logger.warning()`
+- Lines 2392-2396: DEBUG messages → `logger.debug()`
+- **Total conversions: ~24 print statements → logger calls**
+
+**Methods Updated:**
+1. `add_docker_service()` - service addition result logging
+2. `start_docker_service()` - start operation logging (docker compose & docker-compose)
+3. `stop_docker_service()` - stop operation logging (both syntaxes)
+4. `restart_docker_service()` - restart operation logging (both syntaxes)
+5. `start_all_docker_services()` - bulk start logging
+6. `stop_all_docker_services()` - bulk stop logging
+7. `services()` route - debug logging
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Verify no print() statements remain
+  Select-String -Pattern "^\s*print\(" -Path "app.py" | Measure-Object
+  # Result: Count = 0 ✅
+  ```
+- **Criteria:**
+  - ✅ All Docker operation print() statements replaced with logger calls (24 replacements)
+  - ✅ Log levels are appropriate: INFO (success), ERROR (failure), WARNING (timeout), DEBUG (verbose)
+  - ✅ Message content preserved (no information loss)
+  - ✅ All replacements mechanical (no logic changes)
+  - ✅ Zero print() statements remain in app.py
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# Restores print statements
+```
+
+**Commit:** `<TBD - will commit after category system fixes>`
+
+**Notes:** 
+- ✅ Stage A logging infrastructure migration is NOW COMPLETE
+- ✅ All print statements in app.py successfully converted to structured logging
+- ✅ Log levels properly categorized (INFO/ERROR/WARNING/DEBUG)
+- 📋 Next: Fix category system bugs, then run Stage A Approval Gate verification
+- **IMPORTANT:** Discovered category system issues during analysis:
+  * CategoryManager.saveCategories() sends wrong JSON structure
+  * Modal category buttons are hardcoded instead of dynamic
+  * Need fixes before Stage A can be marked complete
+
+---
+
 ### [A-4.20] Fix Pairlist Category Picker UI Inconsistency (Status: Done)
 
 **Date (UTC):** 2025-11-10 02:30  

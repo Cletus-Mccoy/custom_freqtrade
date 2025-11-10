@@ -1769,7 +1769,7 @@ class FreqTradeManager:
             
             # Save updated compose file
             success = self.save_docker_compose(compose_data)
-            print(f"Docker service addition result: {success}")
+            logger.info(f"Docker service addition result: {success}")
             return success
             
         except Exception as e:
@@ -1800,10 +1800,10 @@ class FreqTradeManager:
                     )
                     
                     if result.returncode == 0:
-                        print(f"Successfully started service: {service_name} (using 'docker compose')")
+                        logger.info(f"Successfully started service: {service_name} (using 'docker compose')")
                         return True
                     else:
-                        print(f"Failed with 'docker compose': {result.stderr}")
+                        logger.error(f"Failed with 'docker compose': {result.stderr}")
                         # Fall back to older syntax
                         raise subprocess.CalledProcessError(result.returncode, ['docker', 'compose'])
                         
@@ -1817,10 +1817,10 @@ class FreqTradeManager:
                     )
                     
                     if result.returncode == 0:
-                        print(f"Successfully started service: {service_name} (using 'docker-compose')")
+                        logger.info(f"Successfully started service: {service_name} (using 'docker-compose')")
                         return True
                     else:
-                        print(f"Failed to start service {service_name}: {result.stderr}")
+                        logger.error(f"Failed to start service {service_name}: {result.stderr}")
                         return False
                     
             finally:
@@ -1828,7 +1828,7 @@ class FreqTradeManager:
                 os.chdir(original_dir)
                 
         except subprocess.TimeoutExpired:
-            print(f"Timeout starting service: {service_name}")
+            logger.warning(f"Timeout starting service: {service_name}")
             return False
         except Exception as e:
             logger.error(f"Error starting Docker service: {e}")
@@ -1837,7 +1837,7 @@ class FreqTradeManager:
     def stop_docker_service(self, service_name):
         """Stop a specific Docker service"""
         try:
-            print(f"Stopping Docker service: {service_name}")
+            logger.info(f"Stopping Docker service: {service_name}")
             os.chdir(self.docker_compose_path.parent)
             
             # Try modern Docker Compose syntax first
@@ -1850,12 +1850,12 @@ class FreqTradeManager:
                 )
                 
                 if result.returncode == 0:
-                    print(f"Successfully stopped service: {service_name} (using 'docker compose')")
+                    logger.info(f"Successfully stopped service: {service_name} (using 'docker compose')")
                     return True
                 else:
-                    print(f"Failed to stop service {service_name} with 'docker compose': {result.stderr}")
+                    logger.error(f"Failed to stop service {service_name} with 'docker compose': {result.stderr}")
             except subprocess.TimeoutExpired:
-                print(f"Timeout stopping service {service_name} with 'docker compose'")
+                logger.warning(f"Timeout stopping service {service_name} with 'docker compose'")
             except Exception as e:
                 logger.error(f"Error with 'docker compose' stop: {e}")
             
@@ -1869,12 +1869,12 @@ class FreqTradeManager:
                 )
                 
                 if result.returncode == 0:
-                    print(f"Successfully stopped service: {service_name} (using 'docker-compose')")
+                    logger.info(f"Successfully stopped service: {service_name} (using 'docker-compose')")
                     return True
                 else:
-                    print(f"Failed to stop service {service_name} with 'docker-compose': {result.stderr}")
+                    logger.error(f"Failed to stop service {service_name} with 'docker-compose': {result.stderr}")
             except subprocess.TimeoutExpired:
-                print(f"Timeout stopping service {service_name} with 'docker-compose'")
+                logger.warning(f"Timeout stopping service {service_name} with 'docker-compose'")
                 
         except Exception as e:
             logger.error(f"Error stopping Docker service: {e}")
@@ -1883,7 +1883,7 @@ class FreqTradeManager:
     def restart_docker_service(self, service_name):
         """Restart a specific Docker service"""
         try:
-            print(f"Restarting Docker service: {service_name}")
+            logger.info(f"Restarting Docker service: {service_name}")
             os.chdir(self.docker_compose_path.parent)
             
             # Try modern Docker Compose syntax first
@@ -1896,12 +1896,12 @@ class FreqTradeManager:
                 )
                 
                 if result.returncode == 0:
-                    print(f"Successfully restarted service: {service_name} (using 'docker compose')")
+                    logger.info(f"Successfully restarted service: {service_name} (using 'docker compose')")
                     return True
                 else:
-                    print(f"Failed to restart service {service_name} with 'docker compose': {result.stderr}")
+                    logger.error(f"Failed to restart service {service_name} with 'docker compose': {result.stderr}")
             except subprocess.TimeoutExpired:
-                print(f"Timeout restarting service {service_name} with 'docker compose'")
+                logger.warning(f"Timeout restarting service {service_name} with 'docker compose'")
             except Exception as e:
                 logger.error(f"Error with 'docker compose' restart: {e}")
             
@@ -1915,12 +1915,12 @@ class FreqTradeManager:
                 )
                 
                 if result.returncode == 0:
-                    print(f"Successfully restarted service: {service_name} (using 'docker-compose')")
+                    logger.info(f"Successfully restarted service: {service_name} (using 'docker-compose')")
                     return True
                 else:
-                    print(f"Failed to restart service {service_name} with 'docker-compose': {result.stderr}")
+                    logger.error(f"Failed to restart service {service_name} with 'docker-compose': {result.stderr}")
             except subprocess.TimeoutExpired:
-                print(f"Timeout restarting service {service_name} with 'docker-compose'")
+                logger.warning(f"Timeout restarting service {service_name} with 'docker-compose'")
                 
         except Exception as e:
             logger.error(f"Error restarting Docker service: {e}")
@@ -1929,7 +1929,7 @@ class FreqTradeManager:
     def start_all_docker_services(self):
         """Start all Docker services"""
         try:
-            print("Starting all Docker services...")
+            logger.info("Starting all Docker services...")
             os.chdir(self.docker_compose_path.parent)
             
             # Try modern Docker Compose syntax first
@@ -1942,12 +1942,12 @@ class FreqTradeManager:
                 )
                 
                 if result.returncode == 0:
-                    print("Successfully started all services (using 'docker compose')")
+                    logger.info("Successfully started all services (using 'docker compose')")
                     return True
                 else:
-                    print(f"Failed to start all services with 'docker compose': {result.stderr}")
+                    logger.error(f"Failed to start all services with 'docker compose': {result.stderr}")
             except subprocess.TimeoutExpired:
-                print("Timeout starting all services with 'docker compose'")
+                logger.warning("Timeout starting all services with 'docker compose'")
             except Exception as e:
                 logger.error(f"Error with 'docker compose' up: {e}")
             
@@ -1961,12 +1961,12 @@ class FreqTradeManager:
                 )
                 
                 if result.returncode == 0:
-                    print("Successfully started all services (using 'docker-compose')")
+                    logger.info("Successfully started all services (using 'docker-compose')")
                     return True
                 else:
-                    print(f"Failed to start all services with 'docker-compose': {result.stderr}")
+                    logger.error(f"Failed to start all services with 'docker-compose': {result.stderr}")
             except subprocess.TimeoutExpired:
-                print("Timeout starting all services with 'docker-compose'")
+                logger.warning("Timeout starting all services with 'docker-compose'")
                 
         except Exception as e:
             logger.error(f"Error starting all Docker services: {e}")
@@ -1975,7 +1975,7 @@ class FreqTradeManager:
     def stop_all_docker_services(self):
         """Stop all Docker services"""
         try:
-            print("Stopping all Docker services...")
+            logger.info("Stopping all Docker services...")
             os.chdir(self.docker_compose_path.parent)
             
             # Try modern Docker Compose syntax first
@@ -1988,12 +1988,12 @@ class FreqTradeManager:
                 )
                 
                 if result.returncode == 0:
-                    print("Successfully stopped all services (using 'docker compose')")
+                    logger.info("Successfully stopped all services (using 'docker compose')")
                     return True
                 else:
-                    print(f"Failed to stop all services with 'docker compose': {result.stderr}")
+                    logger.error(f"Failed to stop all services with 'docker compose': {result.stderr}")
             except subprocess.TimeoutExpired:
-                print("Timeout stopping all services with 'docker compose'")
+                logger.warning("Timeout stopping all services with 'docker compose'")
             except Exception as e:
                 logger.error(f"Error with 'docker compose' down: {e}")
             
@@ -2007,12 +2007,12 @@ class FreqTradeManager:
                 )
                 
                 if result.returncode == 0:
-                    print("Successfully stopped all services (using 'docker-compose')")
+                    logger.info("Successfully stopped all services (using 'docker-compose')")
                     return True
                 else:
-                    print(f"Failed to stop all services with 'docker-compose': {result.stderr}")
+                    logger.error(f"Failed to stop all services with 'docker-compose': {result.stderr}")
             except subprocess.TimeoutExpired:
-                print("Timeout stopping all services with 'docker-compose'")
+                logger.warning("Timeout stopping all services with 'docker-compose'")
                 
         except Exception as e:
             logger.error(f"Error stopping all Docker services: {e}")
@@ -2389,11 +2389,11 @@ def services():
     """Docker services management page"""
     services = manager.get_docker_services_detailed()
     compose_yaml = manager.get_docker_compose_content()
-    print(f"DEBUG: Services route called")
-    print(f"DEBUG: services data length: {len(str(services)) if services else 0}")
-    print(f"DEBUG: compose_yaml length: {len(compose_yaml) if compose_yaml else 0}")
+    logger.debug(f"Services route called")
+    logger.debug(f"services data length: {len(str(services)) if services else 0}")
+    logger.debug(f"compose_yaml length: {len(compose_yaml) if compose_yaml else 0}")
     if compose_yaml:
-        print(f"DEBUG: compose_yaml preview: {compose_yaml[:100]}...")
+        logger.debug(f"compose_yaml preview: {compose_yaml[:100]}...")
     settings = load_settings()
     return render_template('services.html', services=services, compose_yaml=compose_yaml, settings=settings)
 
