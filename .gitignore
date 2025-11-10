@@ -91,3 +91,6 @@ hyperopt_results.json
 
 # Backtest results
 backtest-result-*.json
+
+# Web Interface
+/web_interface/config/user_config.json
