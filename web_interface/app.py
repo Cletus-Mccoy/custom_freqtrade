@@ -124,31 +124,24 @@ def delete_ft_apikey(key_name):
 # Unified settings loader: always use user_config.json with nested structure
 def load_settings():
     config_path = BASE_PATH / 'web_interface' / 'config' / 'user_config.json'
-    default_cf = {
-        "enabled": False,
-        "autostart": False,
-        "subdomain": "",
-        "token_set": False,
-        "tunnel_name": "",
-        "tunnel_url": None
-    }
     default_settings = {
-        'global_settings': {
-            'cloudflare': default_cf.copy()
-        }
+        'global_settings': {}
     }
+    
     if config_path.exists():
         with open(config_path, 'r') as f:
             config = json.load(f)
-        # Defensive: ensure nested structure and all keys
+        
+        # Clean up any legacy cloudflare settings
+        if 'global_settings' in config and 'cloudflare' in config.get('global_settings', {}):
+            del config['global_settings']['cloudflare']
+        
+        # Ensure global_settings exists
         if 'global_settings' not in config:
             config['global_settings'] = {}
-        if 'cloudflare' not in config['global_settings']:
-            config['global_settings']['cloudflare'] = {}
-        for k, v in default_cf.items():
-            if k not in config['global_settings']['cloudflare']:
-                config['global_settings']['cloudflare'][k] = v
+        
         return config
+    
     return default_settings
 
 
