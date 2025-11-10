@@ -2066,11 +2066,11 @@ web_interface/
 
 ---
 
-### [A-3.10] Create Logging Infrastructure (Status: In-Progress)
+### [A-3.10] Create Logging Infrastructure (Status: Done)
 
 **Date (UTC):** 2025-11-10 01:30  
 **Owner:** Copilot  
-**Scope:** `utils/logger.py` (new file, ~60 lines), `app.py` (~50 print statements)
+**Scope:** `utils/logger.py` (new file, 98 lines), `app.py` (~50+ print statements)
 
 **Rationale:** Replace ~50 print statements throughout app.py with structured logging. Current print statements mix INFO, DEBUG, WARNING, and ERROR messages without distinction, making production debugging difficult. Creating a centralized logger utility enables proper log levels, formatting, and output control. Also enables future enhancements like file logging, log rotation, and external log aggregation.
 
@@ -2110,11 +2110,11 @@ web_interface/
 
 **Rollback:** 
 ```powershell
-git revert <commit-hash>
+git revert b4abec8
 # logger.py remains, app.py reverts to print statements
 ```
 
-**Commit:** `<TBD - will update after commit>`
+**Commit:** `b4abec8`
 
 **Notes:** 
 - Future: Add file logging with rotation for production use
