@@ -389,22 +389,6 @@ class FreqTradeManager:
                     logger.error(f"Error reading pairlist {file}: {e}")
         return sorted(pairlists, key=lambda x: x['name'])
     
-    def _categorize_pairlist(self, filename):
-        """
-        DEPRECATED: Legacy pairlist categorization method.
-        Use CategoryManager.get_file_category('pairlist', filename) instead.
-        """
-        filename_lower = filename.lower()
-        if 'test' in filename_lower:
-            return 'test'
-        elif 'freqai' in filename_lower:
-            return 'freqai'
-        elif 'full' in filename_lower or 'all' in filename_lower:
-            return 'full'
-        # Remove 'popular' legacy mapping
-        else:
-            return 'custom'
-
     def get_pairlist_content(self, filename):
         """Get the content of a specific pairlist file"""
         try:
@@ -536,21 +520,6 @@ class FreqTradeManager:
                         'type': category_manager.get_file_category('strategy', file.name)
                     })
         return sorted(strategies, key=lambda x: x['name'])
-    
-    def _categorize_strategy(self, filename):
-        """
-        DEPRECATED: Legacy strategy categorization method.
-        Use CategoryManager.get_file_category('strategy', filename) instead.
-        """
-        filename_lower = filename.lower()
-        if 'freqai' in filename_lower:
-            return 'freqai'
-        elif 'example' in filename_lower or 'sample' in filename_lower:
-            return 'example'
-        elif 'test' in filename_lower:
-            return 'test'
-        else:
-            return 'custom'
     
     def get_available_configs(self):
         """Get all available config files from both configs and user_data directories"""

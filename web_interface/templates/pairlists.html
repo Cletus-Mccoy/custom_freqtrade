@@ -89,13 +89,13 @@
                                 {
                                     'style': 'primary',
                                     'icon': 'eye',
-                                    'onclick': 'viewEditPairlist(\'' ~ pairlist.filename ~ '\')',
+                                    'onclick': 'viewEditPairlist(\'' ~ pairlist.filename ~ '\', \'' ~ pairlist.category ~ '\')',
                                     'title': 'View/Edit'
                                 },
                                 {
                                     'style': 'success',
                                     'icon': 'copy',
-                                    'onclick': 'copyPairlist(\'' ~ pairlist.filename ~ '\')',
+                                    'onclick': 'copyPairlist(\'' ~ pairlist.filename ~ '\', \'' ~ pairlist.category ~ '\')',
                                     'title': 'Clone'
                                 },
                                 {
@@ -113,7 +113,18 @@
                             ] %}
                             <tr class="pairlist-row" data-category="{{ pairlist.category if pairlist.category else 'custom' }}">
                                 <td><strong>{{ pairlist.name }}</strong></td>
-                                <td>{{ render_badge(pairlist.category|title if pairlist.category else 'Custom', 'secondary') }}</td>
+                                <td>
+                                    {% set cat_name = pairlist.category if pairlist.category else 'custom' %}
+                                    {% set cat_color = '#6c757d' %}
+                                    {% if settings and settings.pairlists and settings.pairlists.categories %}
+                                        {% for cat in settings.pairlists.categories %}
+                                            {% if cat.name == cat_name %}
+                                                {% set cat_color = cat.color %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                    <span class="badge" style="background-color: {{ cat_color }}; color: #fff;">{{ cat_name|title }}</span>
+                                </td>
                                 <td>{{ pairlist.pairs_count }}</td>
                                 <td>{{ pairlist.filename }}</td>
                                 <td>{{ pairlist.created|default('-') }}</td>
@@ -126,7 +137,16 @@
                                     <div class="row g-2 mb-3">
                                         <div class="col-6">
                                             <small class="text-muted d-block">Category</small>
-                                            {{ render_badge(pairlist.category|title if pairlist.category else 'Custom', 'secondary') }}
+                                            {% set cat_name = pairlist.category if pairlist.category else 'custom' %}
+                                            {% set cat_color = '#6c757d' %}
+                                            {% if settings and settings.pairlists and settings.pairlists.categories %}
+                                                {% for cat in settings.pairlists.categories %}
+                                                    {% if cat.name == cat_name %}
+                                                        {% set cat_color = cat.color %}
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% endif %}
+                                            <span class="badge" style="background-color: {{ cat_color }}; color: #fff;">{{ cat_name|title }}</span>
                                         </div>
                                         <div class="col-6">
                                             <small class="text-muted d-block">Pairs</small>
@@ -189,11 +209,15 @@
                 </div>
                 <!-- Category selector moved above tabs -->
                 <div class="mb-2" id="pairlistCategoryEditRow">
-                    <label for="editCategorySelect" class="form-label">Category</label>
-                    <select id="editCategorySelect" class="form-select" required>
-                        <option value="custom">Custom</option>
-                        <!-- Additional options will be populated by JavaScript -->
-                    </select>
+                    <label class="form-label">Category</label>
+                    <div id="editCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                        <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
+                        <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
+                        <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
+                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
+                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="azrazr">Azrazr</button>
+                    </div>
+                    <input type="hidden" id="editCategorySelect" value="custom" required>
                 </div>
                 <ul class="nav nav-tabs mb-3" id="pairlistEditTabs" role="tablist">
                     <li class="nav-item" role="presentation">
@@ -237,15 +261,25 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <input id="clonePairlistName" class="form-control mb-2" placeholder="New Pairlist Name">
                 <div class="mb-2">
-                    <label for="cloneCategorySelect" class="form-label">Category</label>
-                    <select id="cloneCategorySelect" class="form-select" required>
-                        <option value="custom">Custom</option>
-                        <!-- Additional options will be populated by JavaScript -->
-                    </select>
+                    <label for="clonePairlistName" class="form-label">New Pairlist Name</label>
+                    <input id="clonePairlistName" class="form-control" placeholder="New Pairlist Name">
                 </div>
-                <textarea id="clonePairlistContent" class="form-control" rows="8"></textarea>
+                <div class="mb-2">
+                    <label class="form-label">Category</label>
+                    <div id="cloneCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                        <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
+                        <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
+                        <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
+                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
+                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="azrazr">Azrazr</button>
+                    </div>
+                    <input type="hidden" id="cloneCategorySelect" value="custom" required>
+                </div>
+                <div class="mb-2">
+                    <label for="clonePairlistContent" class="form-label">Content</label>
+                    <textarea id="clonePairlistContent" class="form-control" rows="8"></textarea>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -275,8 +309,7 @@
 </div>
 <script>
 // Category picker initialization is now handled by the modal component
-    }
-}
+
 function closeModalById(id) {
     const modal = document.getElementById(id);
     if (modal) {
@@ -344,16 +377,22 @@ function confirmDeletePairlist() {
             </div>
             <div class="modal-body">
                 <form id="createPairlistForm">
-                    <div class="mb-3">
-                        <label for="pairlistName" class="form-label">Pairlist Name</label>
-                        <input type="text" class="form-control" id="pairlistName" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="categorySelect" class="form-label">Category</label>
-                        <select id="categorySelect" class="form-select" required>
-                            <option value="custom">Custom</option>
-                            <!-- Additional options will be populated by JavaScript -->
-                        </select>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="pairlistName" class="form-label">Pairlist Name</label>
+                            <input type="text" class="form-control" id="pairlistName" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Category</label>
+                            <div id="createCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                                <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
+                                <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
+                                <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
+                                <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
+                                <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="azrazr">Azrazr</button>
+                            </div>
+                            <input type="hidden" id="categorySelect" value="custom" required>
+                        </div>
                     </div>
                     <ul class="nav nav-tabs mb-3" id="createPairlistTabs" role="tablist">
                         <li class="nav-item" role="presentation">
@@ -400,11 +439,15 @@ function confirmDeletePairlist() {
                 <div class="upload-modal-inner">
                     <form id="uploadPairlistForm">
                         <div class="mb-3">
-                            <label for="uploadCategorySelect" class="form-label">Category</label>
-                            <select id="uploadCategorySelect" class="form-select" required>
-                                <option value="custom">Custom</option>
-                                <!-- Additional options will be populated by JavaScript -->
-                            </select>
+                            <label class="form-label">Category</label>
+                            <div id="uploadCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                                <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
+                                <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
+                                <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
+                                <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
+                                <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="azrazr">Azrazr</button>
+                            </div>
+                            <input type="hidden" id="uploadCategorySelect" value="custom" required>
                         </div>
                         <div class="mb-3">
                             <label for="pairlistFile" class="form-label">Select JSON File</label>
@@ -426,6 +469,45 @@ function confirmDeletePairlist() {
 {% block scripts %}
 
 <script>
+// Pairlist categories from config
+const PAIRLIST_CATEGORIES = {{ (settings.pairlists.categories | tojson) if settings and settings.pairlists and settings.pairlists.categories else '[]' | safe }};
+// Function to get category color
+function getPairlistCategoryColor(categoryName) {
+    const cat = PAIRLIST_CATEGORIES.find(c => c.name === categoryName);
+    return cat ? cat.color : '#6c757d';
+}
+
+// Function to get Bootstrap button class from color
+function getButtonClass(color) {
+    const colorMap = {
+        '#198754': 'btn-success',
+        '#0dcaf0': 'btn-info text-white',
+        '#ffc107': 'btn-warning',
+        '#6c757d': 'btn-secondary',
+        '#c757d3': 'btn-secondary'
+    };
+    return colorMap[color] || 'btn-secondary';
+}
+
+// Function to dynamically create category buttons in a group
+function createCategoryButtons(groupId, inputId) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    
+    group.innerHTML = '';
+    PAIRLIST_CATEGORIES.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `btn btn-sm category-select-btn w-20 ${getButtonClass(cat.color)}`;
+        btn.setAttribute('data-value', cat.name);
+        btn.textContent = cat.name.charAt(0).toUpperCase() + cat.name.slice(1);
+        group.appendChild(btn);
+    });
+    
+    // Setup click handlers
+    setupCategorySelect(groupId, inputId);
+}
+
 // --- Create Pairlist Modal Logic ---
 let createPairlistPairs = [];
 function renderCreatePairChips(pairs) {
@@ -514,10 +596,10 @@ function refreshData() {
                                 <td><code>${pairlist.filename}</code></td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary" onclick="viewEditPairlist('${pairlist.filename}')" title="View/Edit">
+                                        <button class="btn btn-outline-primary" onclick="viewEditPairlist('${pairlist.filename}', '${pairlist.category}')" title="View/Edit">
                                             <i class="fas fa-eye"></i>
                                         </button>
-                                        <button class="btn btn-outline-success" onclick="copyPairlist('${pairlist.filename}')" title="Clone">
+                                        <button class="btn btn-outline-success" onclick="copyPairlist('${pairlist.filename}', '${pairlist.category}')" title="Clone">
                                             <i class="fas fa-copy"></i>
                                         </button>
                                         <button class="btn btn-outline-info" onclick="downloadPairlist('${pairlist.filename}')" title="Download">
@@ -622,13 +704,26 @@ function setPairlistEditMode(enabled) {
 let currentPairlistPairs = [];
 
 
-function viewEditPairlist(filename) {
+function viewEditPairlist(filename, category = 'custom') {
     currentPairlistFile = filename;
     document.getElementById('viewEditPairlistTitle').textContent = 'Pairlist: ' + filename;
     document.getElementById('viewEditPairlistName').value = filename;
     setPairlistEditMode(false);
     document.getElementById('jsonValidationMsg').style.display = 'none';
     document.getElementById('jsonValidationMsg').textContent = '';
+    
+    // Set the category in the edit modal
+    const editCategoryGroup = document.getElementById('editCategoryGroup');
+    const editCategoryInput = document.getElementById('editCategorySelect');
+    if (editCategoryGroup && editCategoryInput) {
+        editCategoryGroup.querySelectorAll('.category-select-btn').forEach(btn => btn.classList.remove('active'));
+        const activeBtn = editCategoryGroup.querySelector(`.category-select-btn[data-value="${category}"]`);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+            editCategoryInput.value = category;
+        }
+    }
+    
     fetch(`/api/pairlist/${filename}`)
         .then(r => r.json())
         .then(data => {
@@ -729,6 +824,34 @@ document.addEventListener('DOMContentLoaded', function() {
     if (uploadModal) {
         uploadModal.addEventListener('show.bs.modal', renderUploadCategoryButtons);
     }
+
+    // Setup category button groups (setupCategorySelect is defined in the createCategoryButtons function)
+    function setupCategorySelect(groupId, inputId) {
+        const group = document.getElementById(groupId);
+        const input = document.getElementById(inputId);
+        if (group && input) {
+            group.querySelectorAll('.category-select-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    input.value = btn.getAttribute('data-value');
+                });
+            });
+            // Set default active (custom or first available)
+            const defaultBtn = group.querySelector('.category-select-btn[data-value="custom"]') || 
+                              group.querySelector('.category-select-btn');
+            if (defaultBtn) {
+                defaultBtn.classList.add('active');
+                input.value = defaultBtn.getAttribute('data-value');
+            }
+        }
+    }
+    
+    // Initialize all category button groups dynamically
+    createCategoryButtons('createCategoryGroup', 'categorySelect');
+    createCategoryButtons('editCategoryGroup', 'editCategorySelect');
+    createCategoryButtons('cloneCategoryGroup', 'cloneCategorySelect');
+    createCategoryButtons('uploadCategoryGroup', 'uploadCategorySelect');
 });
 
 function enablePairlistEditing() {
@@ -790,9 +913,22 @@ function savePairlistEdits() {
     .catch(() => alert('Failed to update pairlist.'));
 }
 
-function copyPairlist(filename) {
+function copyPairlist(filename, category = 'custom') {
     document.getElementById('clonePairlistName').value = filename.replace('.json', '_copy.json');
     document.getElementById('clonePairlistContent').value = 'Loading...';
+    
+    // Set the category in the clone modal
+    const cloneCategoryGroup = document.getElementById('cloneCategoryGroup');
+    const cloneCategoryInput = document.getElementById('cloneCategorySelect');
+    if (cloneCategoryGroup && cloneCategoryInput) {
+        cloneCategoryGroup.querySelectorAll('.category-select-btn').forEach(btn => btn.classList.remove('active'));
+        const activeBtn = cloneCategoryGroup.querySelector(`.category-select-btn[data-value="${category}"]`);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+            cloneCategoryInput.value = category;
+        }
+    }
+    
     fetch(`/api/pairlist/${filename}`)
         .then(r => r.json())
         .then(data => {
@@ -834,4 +970,15 @@ function deletePairlist(filename) {
     modal.show();
 }
 </script>
+
+<style>
+    .category-filter-btn.active, .category-select-btn.active {
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        outline: 2px solid #fff;
+        font-weight: bold;
+    }
+    .category-select-btn.w-20 {
+        width: 20%;
+    }
+</style>
 {% endblock scripts%}

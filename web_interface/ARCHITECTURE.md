@@ -2066,7 +2066,7 @@ web_interface/
 
 ---
 
-### [A-4.20] Fix Pairlist Category Picker UI Inconsistency (Status: Planned)
+### [A-4.20] Fix Pairlist Category Picker UI Inconsistency (Status: In-Progress)
 
 **Date (UTC):** 2025-11-10 02:30  
 **Owner:** Copilot  
