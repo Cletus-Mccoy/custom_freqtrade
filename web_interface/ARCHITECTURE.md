@@ -2301,7 +2301,7 @@ SET USE_PROVIDER_ABSTRACTION=false
 # Restart server
 ```
 
-**Commit:** `<TBD>`
+**Commit:** `7397b15`
 
 **Notes:**
 - Feature flag checked at module load time (not per-request)
