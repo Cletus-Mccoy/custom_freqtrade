@@ -2066,6 +2066,129 @@ web_interface/
 
 ---
 
+### [A-4.20] Fix Pairlist Category Picker UI Inconsistency (Status: Planned)
+
+**Date (UTC):** 2025-11-10 02:30  
+**Owner:** Copilot  
+**Scope:** `pairlists.html` (4 modals with dropdown category selectors)
+
+**Rationale:** **CRITICAL UX BUG FOUND BY USER:** Pairlist modals use dropdown `<select>` elements for category selection, while strategies and configs use visual button groups. This creates inconsistent UX where:
+1. Create pairlist modal shows boring dropdown with only "Custom" visible
+2. Users can't see available categories without clicking dropdown
+3. No color-coding like strategies/configs have
+4. Violates principle of least surprise - same feature looks different
+
+This fragmentation was documented in `CATEGORY_UI_FRAGMENTATION_ANALYSIS.md`. The analysis reveals:
+- **Strategies & Configs:** 8 instances of visual button pickers (`btn-group` with `.category-select-btn`)
+- **Pairlists:** 4 instances of dropdown selects - ALL need replacement
+- **JavaScript:** Duplicate `setupCategorySelect()` functions in strategies.html and configs.html
+
+**Steps:**
+1. Read pairlists.html modals to understand current dropdown implementation
+2. Replace CREATE modal dropdown (line ~353) with visual button group
+3. Replace EDIT modal dropdown (line ~193) with visual button group
+4. Replace CLONE modal dropdown (line ~243) with visual button group
+5. Replace UPLOAD modal dropdown (line ~404) with visual button group
+6. Add CSS class `.category-select-btn` styling if missing
+7. Test all 4 modals show visual category pickers with colors
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Search for remaining dropdown selectors (should find none in pairlists.html)
+  Select-String -Pattern "categorySelect.*form-select" -Path templates/pairlists.html
+  # Should return 0 matches after fix
+  
+  # Verify button groups exist
+  Select-String -Pattern "category-select-btn" -Path templates/pairlists.html
+  # Should return 4+ matches (one per modal)
+  ```
+- **Manual Testing:**
+  1. Open pairlists page in browser
+  2. Click "Create" button → modal should show visual button group (not dropdown)
+  3. Verify 5 colored category buttons visible: example, test, freqai, full, custom
+  4. Click each button → should highlight/activate
+  5. Create pairlist → should save with selected category
+  6. Repeat for Edit, Clone, Upload modals
+  7. Verify categories display correctly in card/table view
+  
+- **Criteria:**
+  - ✅ All 4 pairlist modals use visual button pickers (no dropdowns)
+  - ✅ Category buttons match strategies/configs styling
+  - ✅ All 5 categories visible without clicking
+  - ✅ Color-coding consistent across all resource types
+  - ✅ Category selection persists when creating/editing pairlists
+  - ✅ No JavaScript errors in console
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# Restores dropdown selectors (though inferior UX)
+```
+
+**Commit:** `<TBD - will update after commit>`
+
+**Notes:** 
+- This fix addresses user-reported bug directly
+- Makes pairlists UX consistent with strategies and configs
+- Does NOT yet extract shared component (that's future Stage B/C work)
+- JavaScript duplication remains (will address in componentization phase)
+- Quick win - solves immediate UX problem without risky refactoring
+- Documents fragmentation problem for future comprehensive fix
+
+---
+
+### [A-4.10] Remove Deprecated Category Methods (Status: Paused)
+
+**Date (UTC):** 2025-11-10 02:00  
+**Owner:** Copilot  
+**Scope:** `app.py` (2 deprecated methods: `_categorize_pairlist()`, `_categorize_strategy()`)
+
+**Rationale:** After successful CategoryManager integration in [A-1.20], the legacy `_categorize_pairlist()` and `_categorize_strategy()` methods are no longer used. These methods were marked DEPRECATED but kept for rollback safety. Now that the CategoryManager integration is stable and committed, we can safely remove these ~25 lines of dead code to reduce maintenance burden.
+
+**Steps:**
+1. Verify no code references `_categorize_pairlist()` or `_categorize_strategy()`
+2. Remove `_categorize_pairlist()` method from FreqTradeManager class
+3. Remove `_categorize_strategy()` method from FreqTradeManager class
+4. Test that pairlist and strategy pages still show correct categories
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Search for any remaining references to deprecated methods
+  cd web_interface
+  Select-String -Pattern "_categorize_(pairlist|strategy)" -Path app.py
+  # Should only show the method definitions being removed, not calls
+  
+  # Test CategoryManager still works
+  python -c "from web_interface.utils.category_manager import CategoryManager; from pathlib import Path; cm = CategoryManager(Path('config/user_config.json')); print(cm.get_file_category('pairlist', 'test.json'))"
+  ```
+- **Criteria:**
+  - ✅ No code references to removed methods
+  - ✅ Pairlist page displays correct categories
+  - ✅ Strategy page displays correct categories
+  - ✅ CategoryManager continues working as expected
+  - ✅ ~25 lines of dead code removed
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# Restores deprecated methods (though they're unused)
+```
+
+**Commit:** `<TBD - will complete after A-4.20>`
+
+**Notes:** 
+- **PAUSED:** User found critical UX bug (pairlist category picker) - priority shifted to A-4.20
+- Methods successfully removed from app.py (16 lines deleted)
+- Will complete commit after A-4.20 fix to group related category improvements
+- This is safe cleanup after successful CategoryManager rollout
+- Methods were kept through [A-1.20] for rollback confidence  
+- Removal reduces cognitive load when reading FreqTradeManager class
+- No functional changes - methods were already bypassed
+
+---
+
 ### [A-3.10] Create Logging Infrastructure (Status: Done)
 
 **Date (UTC):** 2025-11-10 01:30  
