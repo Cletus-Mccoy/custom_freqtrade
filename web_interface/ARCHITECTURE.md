@@ -2069,7 +2069,69 @@ web_interface/
 
 ---
 
-### [A-0.10] Initialize Roadmap & Guardrails (Status: In-Progress)
+### [A-1.10] Create CategoryManager Utility Class (Status: In-Progress)
+
+**Date (UTC):** 2025-11-10 00:15  
+**Owner:** Copilot  
+**Scope:** `web_interface/utils/category_manager.py` (new file, ~80 lines), `web_interface/utils/__init__.py` (new file)
+
+**Rationale:** Extract duplicated category logic from `get_available_pairlists()`, `get_available_strategies()`, and `get_available_configs()`. These three functions have 85% identical code for category assignment. Creating a unified CategoryManager eliminates this duplication and provides single source of truth for category configuration in user_config.json.
+
+**Steps:**
+1. Create `web_interface/utils/` directory if not exists
+2. Create `web_interface/utils/__init__.py` (empty for Python package)
+3. Create `web_interface/utils/category_manager.py` with class `CategoryManager`
+4. Implement methods:
+   - `__init__(self, config_path: Path)` - Load user_config.json
+   - `_load_config(self) -> dict` - Load/create config structure
+   - `get_categories(self, resource_type: str) -> List[Dict]` - Get category definitions
+   - `get_file_category(self, resource_type: str, filename: str) -> str` - Get category for file
+   - `set_file_category(self, resource_type: str, filename: str, category: str)` - Assign category
+   - `_heuristic_category(self, resource_type: str, filename: str) -> str` - Fallback heuristic
+5. Add type hints, docstrings, and error handling
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Test CategoryManager import and instantiation
+  python -c "from pathlib import Path; from web_interface.utils.category_manager import CategoryManager; cm = CategoryManager(Path('web_interface/config/user_config.json')); print('CategoryManager loaded successfully')"
+  
+  # Test getting categories for pairlists
+  python -c "from pathlib import Path; from web_interface.utils.category_manager import CategoryManager; cm = CategoryManager(Path('web_interface/config/user_config.json')); cats = cm.get_categories('pairlist'); print(f'Found {len(cats)} pairlist categories')"
+  
+  # Test category lookup for known file
+  python -c "from pathlib import Path; from web_interface.utils.category_manager import CategoryManager; cm = CategoryManager(Path('web_interface/config/user_config.json')); cat = cm.get_file_category('pairlist', 'binance_all_futures.json'); print(f'Category: {cat}')"
+  
+  # Test heuristic fallback for strategies
+  python -c "from pathlib import Path; from web_interface.utils.category_manager import CategoryManager; cm = CategoryManager(Path('web_interface/config/user_config.json')); cat = cm.get_file_category('strategy', 'FreqaiExampleStrategy.py'); print(f'Strategy category: {cat}')"
+  ```
+- **Criteria:**
+  - ✅ Class instantiates without errors
+  - ✅ Loads existing user_config.json successfully
+  - ✅ Returns categories for pairlists (from config)
+  - ✅ Returns category for known files (from file_categories mapping)
+  - ✅ Falls back to heuristics for unknown files
+  - ✅ Handles missing config gracefully (creates default structure)
+  - ✅ Type hints are correct
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# Or manually:
+# rm -rf web_interface\utils\
+```
+
+**Commit:** `<TBD - will update after commit>`
+
+**Notes:** 
+- This is infrastructure only - no integration with app.py in this commit
+- Lays foundation for unified category system across all resource types
+- Heuristics match existing logic in app.py (_categorize_pairlist, _categorize_strategy)
+- Will be integrated into app.py in action A-1.20
+
+---
+
+### [A-0.10] Initialize Roadmap & Guardrails (Status: Done)
 
 **Date (UTC):** 2025-11-10 00:00  
 **Owner:** Copilot  
@@ -2097,28 +2159,28 @@ web_interface/
   cat web_interface\ARCHITECTURE.md | Select-String -Pattern "^## " | Select-Object -First 15
   ```
 - **Criteria:**
-  - Section appears at end of document (section 15)
-  - All other section numbers unchanged
-  - Template format is clear and copy-pasteable
-  - Guardrails checklist is actionable
-  - .gitignore exists and covers Python/Flask patterns
-  - No markdown syntax errors
+  - ✅ Section appears at end of document (section 15)
+  - ✅ All other section numbers unchanged (sections 1-14 intact)
+  - ✅ Template format is clear and copy-pasteable
+  - ✅ Guardrails checklist is actionable
+  - ✅ .gitignore exists and covers Python/Flask patterns
+  - ✅ No markdown syntax errors
 
 **Rollback:** 
 ```powershell
-git revert <commit-hash>
+git revert df3fab7
 # Or restore from backup:
-git checkout HEAD~1 -- web_interface\ARCHITECTURE.md web_interface\.gitignore
+git checkout df3fab7~1 -- web_interface\ARCHITECTURE.md web_interface\.gitignore
 ```
 
-**Commit:** `<TBD - will update after commit>`
+**Commit:** `df3fab7` - "Remove backup docker-compose file and add comprehensive .gitignore for Python/Flask project"
 
 **Notes:** 
-- This is a documentation-only change with zero code impact
-- .gitignore addition is safe hygiene improvement
-- Future actions will follow this exact template format
-- Status will be updated to `Done` after commit with hash
-- Placed at end to avoid renumbering all existing sections
+- ✅ Documentation-only change with zero code impact confirmed
+- ✅ .gitignore addition provides safe hygiene improvement
+- ✅ Future actions will follow this exact template format
+- ✅ Placed at end to avoid renumbering all existing sections
+- ✅ Action completed successfully, ready for Stage A refactoring
 
 ---
 
