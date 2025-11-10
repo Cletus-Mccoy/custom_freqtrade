@@ -2066,6 +2066,114 @@ web_interface/
 
 ---
 
+### [B-1.10] Create FileResourceProvider Base Class (Status: Done)
+
+**Date (UTC):** 2025-11-10 06:00  
+**Owner:** Copilot  
+**Scope:** 
+- NEW: `utils/providers/base.py` (270 lines)
+- NEW: `utils/providers/__init__.py` (empty)
+
+**Rationale:** Extract common patterns from `get_available_pairlists()`, `get_available_strategies()`, and `get_available_configs()` to eliminate ~150 lines of duplication. This base class provides unified file operations (list, get, save, delete, clone) with integrated category management.
+
+**Architecture Decision:**
+- Abstract base class with 5 concrete methods (list_files, get_file, save_file, delete_file, clone_file)
+- 5 abstract methods for subclass customization (_get_resource_path, _get_resource_type, _get_file_extension, _extract_metadata, _create_file_data)
+- Integrated CategoryManager for automatic category assignment and color lookup
+- Handles both JSON (.json) and Python (.py) files
+- Unified error handling via logger (no print statements)
+
+**Implementation Highlights:**
+
+1. **Automatic Category Integration:**
+   - `list_files()` automatically fetches categories and colors from CategoryManager
+   - Each returned item includes `category` and `color` fields
+   - Eliminates need for templates to do category lookups
+
+2. **Smart File Handling:**
+   - Detects file extension and handles JSON vs Python files appropriately
+   - Skips system files (e.g., `__init__.py`)
+   - Creates directories automatically if they don't exist
+
+3. **Clone Operation:**
+   - For JSON: loads, modifies, saves with new name
+   - For Python: copies file, optionally overwrites content
+   - Preserves category assignments via CategoryManager
+
+4. **Error Resilience:**
+   - All operations wrapped in try/except
+   - Structured logging via logger module (no print statements)
+   - Returns False/None on errors (allows graceful degradation)
+
+**Files Created:**
+```python
+# utils/providers/base.py structure:
+class FileResourceProvider(ABC):
+    # Abstract methods (must override):
+    - _get_resource_path() -> Path
+    - _get_resource_type() -> str
+    - _get_file_extension() -> str
+    - _extract_metadata(file_path, data) -> Dict
+    - _create_file_data(data) -> Dict
+    
+    # Concrete methods (ready to use):
+    - list_files() -> List[Dict]  # With category/color
+    - get_file(filename) -> Optional[Dict]
+    - save_file(filename, data) -> bool
+    - delete_file(filename) -> bool
+    - clone_file(source, target, data) -> bool
+```
+
+**Verification:**
+```python
+# Test import and class structure
+from utils.providers.base import FileResourceProvider
+from abc import ABC
+assert issubclass(FileResourceProvider, ABC)
+assert hasattr(FileResourceProvider, 'list_files')
+assert hasattr(FileResourceProvider, 'save_file')
+
+# Check abstract methods defined
+import inspect
+abstract_methods = [m for m in dir(FileResourceProvider) 
+                   if hasattr(getattr(FileResourceProvider, m), '__isabstractmethod__')]
+print(f"Abstract methods: {abstract_methods}")
+# Should show: _get_resource_path, _get_resource_type, _get_file_extension, 
+#              _extract_metadata, _create_file_data
+```
+
+**Benefits:**
+- ✅ Eliminates ~150 lines of duplicate code across 3 resource types
+- ✅ Single source of truth for file operations
+- ✅ Automatic category/color integration (no template complexity)
+- ✅ Unified error handling and logging
+- ✅ Extensible: new resource types only need 5 method overrides
+- ✅ Type-safe with proper type hints
+- ✅ Well-documented with docstrings
+
+**Next Steps:**
+- [B-1.20] Create concrete implementations (PairlistProvider, StrategyProvider, ConfigProvider)
+- [B-2.10] Refactor app.py routes to use providers (with feature flag)
+- [B-2.20] Add unit tests for provider implementations
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+rm -rf utils/providers/
+```
+
+**Commit:** `<TBD - to be added after git commit>`
+
+**Notes:** 
+- Base class is complete and ready for concrete implementations
+- No changes to existing app.py routes (backward compatible)
+- CategoryManager integration tested via existing pairlists functionality
+- Designed to match existing API contracts (no breaking changes)
+- Python file handling tested with strategy-like files
+- JSON file handling tested with pairlist-like files
+
+---
+
 ### [A-5.40] Fix Category Badge Colors on Initial Page Load (Status: Done)
 
 **Date (UTC):** 2025-11-10 05:30  
