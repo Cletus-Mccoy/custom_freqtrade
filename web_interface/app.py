@@ -14,6 +14,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
 import docker
 from utils.category_manager import CategoryManager
+from utils.file_operations import send_file_download
 from werkzeug.utils import secure_filename
 from flask import abort
 
@@ -2645,42 +2646,19 @@ def delete_pairlist(filename):
 # --- Config Download Endpoint ---
 @app.route('/api/config/download/<filename>')
 def download_config(filename):
-    """Download a config file as attachment (identical to pairlist logic)"""
-    try:
-        config_path = manager.configs_path / filename
-        if not config_path.exists():
-            return jsonify({'error': 'Config not found'}), 404
-        return send_file(
-            config_path,
-            as_attachment=True,
-            download_name=filename,
-            mimetype='application/json'
-        )
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    """Download a config file as attachment"""
+    return send_file_download(manager.configs_path / filename, filename, 'application/json')
 
 @app.route('/api/pairlist/download/<filename>')
 def download_pairlist(filename):
-    """Download a pairlist file as attachment (same method as strategy download)"""
-    try:
-        pairlist_path = PAIRLISTS_PATH / filename
-        if not pairlist_path.exists():
-            return jsonify({'error': 'Pairlist not found'}), 404
-        return send_file(pairlist_path, as_attachment=True, download_name=filename, mimetype='application/json')
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    """Download a pairlist file as attachment"""
+    return send_file_download(PAIRLISTS_PATH / filename, filename, 'application/json')
 
 # --- Strategy Download Endpoint ---
 @app.route('/api/strategy/download/<filename>')
 def download_strategy(filename):
     """Download a strategy file as attachment"""
-    try:
-        strategy_path = STRATEGIES_PATH / filename
-        if not strategy_path.exists():
-            return jsonify({'error': 'Strategy not found'}), 404
-        return send_file(strategy_path, as_attachment=True, download_name=filename, mimetype='text/x-python')
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    return send_file_download(STRATEGIES_PATH / filename, filename, 'text/x-python')
 
 @app.route('/api/config/<filename>')
 def get_config(filename):

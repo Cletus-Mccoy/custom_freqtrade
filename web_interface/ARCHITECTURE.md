@@ -2066,6 +2066,61 @@ web_interface/
 
 ---
 
+### [A-2.10] Create File Operation Utilities (Status: In-Progress)
+
+**Date (UTC):** 2025-11-10 01:00  
+**Owner:** Copilot  
+**Scope:** `utils/file_operations.py` (new file, ~40 lines), `app.py` (3 download routes)
+
+**Rationale:** Three download routes (`download_config`, `download_pairlist`, `download_strategy`) have 95% identical code - only differing in file path and mimetype. Extract common logic into `utils/file_operations.py` with a `send_file_download()` function that handles path validation, error handling, and Flask send_file response. Eliminates ~30 lines of duplication.
+
+**Steps:**
+1. Create `utils/file_operations.py` with function:
+   ```python
+   def send_file_download(file_path: Path, filename: str, mimetype: str = 'application/json'):
+       """Send file as downloadable attachment with validation and error handling"""
+   ```
+2. Import in app.py: `from utils.file_operations import send_file_download`
+3. Replace `download_config()` body with single call to `send_file_download()`
+4. Replace `download_pairlist()` body with single call to `send_file_download()`
+5. Replace `download_strategy()` body with single call to `send_file_download()`
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Test each download endpoint (requires running Flask app)
+  curl -O http://localhost:5000/api/config/download/config.json
+  curl -O http://localhost:5000/api/pairlist/download/binance_usdt_futures.json
+  curl -O http://localhost:5000/api/strategy/download/SampleStrategy.py
+  
+  # Verify files downloaded correctly
+  # Check Content-Disposition header includes filename
+  # Verify correct mimetype returned
+  ```
+- **Criteria:**
+  - ✅ All three download endpoints return files correctly
+  - ✅ Content-Disposition header includes attachment filename
+  - ✅ Correct mimetype for each resource type (JSON vs Python)
+  - ✅ 404 error returned for non-existent files
+  - ✅ 500 error handling works for permission/IO errors
+  - ✅ No code duplication in download routes
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# file_operations.py remains, download routes revert to inline logic
+```
+
+**Commit:** `<TBD - will update after commit>`
+
+**Notes:** 
+- Mimetype detection could be enhanced in future (auto-detect from extension)
+- This pattern can extend to other file operations (upload validation, deletion)
+- Reduces download route handlers from ~12 lines each to ~2 lines each
+- Next: Action A-3.10 will create logging infrastructure
+
+---
+
 ### [A-1.20] Integrate CategoryManager in App Routes (Status: Done)
 
 **Date (UTC):** 2025-11-10 00:30  
