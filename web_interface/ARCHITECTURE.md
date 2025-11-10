@@ -2069,6 +2069,66 @@ web_interface/
 
 ---
 
+### [A-1.20] Integrate CategoryManager in App Routes (Status: In-Progress)
+
+**Date (UTC):** 2025-11-10 00:30  
+**Owner:** Copilot  
+**Scope:** `app.py` (3 functions: `get_available_pairlists()`, `get_available_strategies()`, `get_available_configs()`)
+
+**Rationale:** Replace inline category logic in 3 file list functions with CategoryManager calls. This eliminates ~45 lines of duplicated code and establishes CategoryManager as the single source of truth for category assignments. Each function currently has its own inline config loading and heuristic logic - consolidating to CategoryManager removes this duplication.
+
+**Steps:**
+1. Import CategoryManager at top of app.py: `from utils.category_manager import CategoryManager`
+2. Create global instance after BASE_PATH definitions: `category_manager = CategoryManager(BASE_PATH / 'web_interface' / 'config' / 'user_config.json')`
+3. In `get_available_pairlists()` (line 514+), replace inline user_config.json loading and `_categorize_pairlist()` call with: `category = category_manager.get_file_category('pairlist', file.name)`
+4. In `get_available_strategies()` (line 681+), replace `_categorize_strategy()` call with: `category = category_manager.get_file_category('strategy', file.name)`
+5. In `get_available_configs()` (line 708+), replace inline heuristic logic with: `category = category_manager.get_file_category('config', file.name)`
+6. Add deprecation comment to `_categorize_pairlist()` and `_categorize_strategy()` methods (keep for rollback safety)
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Test pairlists API
+  curl http://localhost:5000/api/pairlists | jq '.pairlists[0].category'
+  # Should return category string
+  
+  # Test strategies API  
+  curl http://localhost:5000/api/strategies | jq '.strategies[0].category'
+  # Should return category string
+  
+  # Test configs API
+  curl http://localhost:5000/api/configs | jq '.configs[0].category'
+  # Should return category string
+  
+  # Verify categories match previous behavior
+  # Check UI: load each page and verify category filters work
+  ```
+- **Criteria:**
+  - ✅ All files appear in correct categories (compare with before)
+  - ✅ Category filter buttons work on all resource pages
+  - ✅ No errors in console or server logs
+  - ✅ user_config.json structure unchanged
+  - ✅ API responses have identical structure
+  - ✅ Known files return expected categories (e.g., binance_all_futures.json → 'example')
+  - ✅ Heuristic fallback works (e.g., FreqaiExampleStrategy.py → 'freqai')
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# CategoryManager utility remains, app.py reverts to original
+```
+
+**Commit:** `<TBD - will update after commit>`
+
+**Notes:** 
+- First real integration of CategoryManager utility
+- Old `_categorize_*()` methods kept with deprecation comment (can remove in later cleanup)
+- Reduces duplication: ~15 lines removed per function = ~45 lines total
+- Paves way for unified category management across all resources
+- Next: Action A-2.10 will create file operation utilities
+
+---
+
 ### [A-1.10] Create CategoryManager Utility Class (Status: Done)
 
 **Date (UTC):** 2025-11-10 00:15  

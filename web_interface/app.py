@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
 import docker
+from utils.category_manager import CategoryManager
 from werkzeug.utils import secure_filename
 from flask import abort
 
@@ -28,6 +29,8 @@ STRATEGIES_PATH = USER_DATA_PATH / "strategies"
 CONFIGS_PATH = USER_DATA_PATH
 SETTINGS_PATH = USER_DATA_PATH / "settings.json"
 
+# --- Category Manager ---
+category_manager = CategoryManager(BASE_PATH / "web_interface" / "config" / "user_config.json")
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
@@ -512,28 +515,19 @@ class FreqTradeManager:
         self.docker_compose_path = BASE_PATH / "docker-compose.yml"
         
     def get_available_pairlists(self):
-        """Get all available pairlist files, using new user_config.json structure for categories and file_categories"""
-        config_path = BASE_PATH / 'web_interface' / 'config' / 'user_config.json'
-        categories = {}
-        file_categories = {}
-        if config_path.exists():
-            with open(config_path, 'r', encoding='utf-8') as f:
-                try:
-                    config = json.load(f)
-                    pairlists_section = config.get('pairlists', {})
-                    for cat in pairlists_section.get('categories', []):
-                        categories[cat['name']] = cat.get('color', '#6c757d')
-                    file_categories = pairlists_section.get('file_categories', {})
-                except Exception as e:
-                    print(f"Error loading user categories: {e}")
+        """Get all available pairlist files, using CategoryManager for unified category handling"""
+        # Get categories from CategoryManager
+        categories = {cat['name']: cat.get('color', '#6c757d') 
+                     for cat in category_manager.get_categories('pairlist')}
+        
         pairlists = []
         if self.pairlists_path.exists():
             for file in self.pairlists_path.glob("*.json"):
                 try:
                     with open(file, 'r') as f:
                         data = json.load(f)
-                    # Get category from file_categories mapping or fallback to old logic
-                    category = file_categories.get(file.name) or self._categorize_pairlist(file.name)
+                    # Get category from CategoryManager
+                    category = category_manager.get_file_category('pairlist', file.name)
                     color = categories.get(category, '#6c757d')
                     pairlists.append({
                         'name': file.name,
@@ -548,7 +542,10 @@ class FreqTradeManager:
         return sorted(pairlists, key=lambda x: x['name'])
     
     def _categorize_pairlist(self, filename):
-        """Categorize pairlist based on filename (legacy fallback, no 'popular')"""
+        """
+        DEPRECATED: Legacy pairlist categorization method.
+        Use CategoryManager.get_file_category('pairlist', filename) instead.
+        """
         filename_lower = filename.lower()
         if 'test' in filename_lower:
             return 'test'
@@ -678,7 +675,7 @@ class FreqTradeManager:
             return False
     
     def get_available_strategies(self):
-        """Get all available strategy files"""
+        """Get all available strategy files, using CategoryManager for unified category handling"""
         strategies = []
         if self.strategies_path.exists():
             for file in self.strategies_path.glob("*.py"):
@@ -688,12 +685,15 @@ class FreqTradeManager:
                         'filename': file.name,
                         'path': str(file),
                         'modified': datetime.datetime.fromtimestamp(file.stat().st_mtime).strftime('%Y-%m-%d %H:%M'),
-                        'type': self._categorize_strategy(file.name)
+                        'type': category_manager.get_file_category('strategy', file.name)
                     })
         return sorted(strategies, key=lambda x: x['name'])
     
     def _categorize_strategy(self, filename):
-        """Categorize strategy based on filename"""
+        """
+        DEPRECATED: Legacy strategy categorization method.
+        Use CategoryManager.get_file_category('strategy', filename) instead.
+        """
         filename_lower = filename.lower()
         if 'freqai' in filename_lower:
             return 'freqai'
@@ -726,7 +726,8 @@ class FreqTradeManager:
                         'dry_run': data.get('dry_run', True),
                         'freqai_enabled': data.get('freqai', {}).get('enabled', False),
                         'modified': datetime.datetime.fromtimestamp(file.stat().st_mtime).strftime('%Y-%m-%d %H:%M'),
-                        'location': 'configs'
+                        'location': 'configs',
+                        'category': category_manager.get_file_category('config', file.name)
                     })
                 except Exception as e:
                     print(f"Error reading config {file}: {e}")
@@ -748,7 +749,8 @@ class FreqTradeManager:
                         'dry_run': data.get('dry_run', True),
                         'freqai_enabled': data.get('freqai', {}).get('enabled', False),
                         'modified': datetime.datetime.fromtimestamp(file.stat().st_mtime).strftime('%Y-%m-%d %H:%M'),
-                        'location': 'user_data'
+                        'location': 'user_data',
+                        'category': category_manager.get_file_category('config', file.name)
                     })
                 except Exception as e:
                     print(f"Error reading config {file}: {e}")
