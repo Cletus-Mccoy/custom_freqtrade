@@ -211,11 +211,7 @@
                 <div class="mb-2" id="pairlistCategoryEditRow">
                     <label class="form-label">Category</label>
                     <div id="editCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
-                        <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
-                        <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
-                        <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
-                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
-                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="azrazr">Azrazr</button>
+                        <!-- Category buttons will be dynamically rendered by CategoryManager -->
                     </div>
                     <input type="hidden" id="editCategorySelect" value="custom" required>
                 </div>
@@ -268,11 +264,7 @@
                 <div class="mb-2">
                     <label class="form-label">Category</label>
                     <div id="cloneCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
-                        <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
-                        <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
-                        <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
-                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
-                        <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="azrazr">Azrazr</button>
+                        <!-- Category buttons will be dynamically rendered by CategoryManager -->
                     </div>
                     <input type="hidden" id="cloneCategorySelect" value="custom" required>
                 </div>
@@ -385,11 +377,7 @@ function confirmDeletePairlist() {
                         <div class="col-md-6">
                             <label class="form-label">Category</label>
                             <div id="createCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
-                                <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
-                                <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
-                                <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
-                                <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
-                                <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="azrazr">Azrazr</button>
+                                <!-- Category buttons will be dynamically rendered by CategoryManager -->
                             </div>
                             <input type="hidden" id="categorySelect" value="custom" required>
                         </div>
@@ -441,11 +429,7 @@ function confirmDeletePairlist() {
                         <div class="mb-3">
                             <label class="form-label">Category</label>
                             <div id="uploadCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
-                                <button type="button" class="btn btn-success category-select-btn w-20" data-value="custom">Custom</button>
-                                <button type="button" class="btn btn-info text-white category-select-btn w-20" data-value="freqai">FreqAI</button>
-                                <button type="button" class="btn btn-warning category-select-btn w-20" data-value="example">Example</button>
-                                <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="test">Test</button>
-                                <button type="button" class="btn btn-secondary category-select-btn w-20" data-value="azrazr">Azrazr</button>
+                                <!-- Category buttons will be dynamically rendered by CategoryManager -->
                             </div>
                             <input type="hidden" id="uploadCategorySelect" value="custom" required>
                         </div>
@@ -470,7 +454,11 @@ function confirmDeletePairlist() {
 
 <script>
 // Pairlist categories from config
-const PAIRLIST_CATEGORIES = {{ (settings.pairlists.categories | tojson) if settings and settings.pairlists and settings.pairlists.categories else '[]' | safe }};
+{% if settings and settings.pairlists and settings.pairlists.categories %}
+const PAIRLIST_CATEGORIES = {{ settings.pairlists.categories | tojson | safe }};
+{% else %}
+const PAIRLIST_CATEGORIES = [];
+{% endif %}
 // Function to get category color
 function getPairlistCategoryColor(categoryName) {
     const cat = PAIRLIST_CATEGORIES.find(c => c.name === categoryName);
@@ -487,6 +475,28 @@ function getButtonClass(color) {
         '#c757d3': 'btn-secondary'
     };
     return colorMap[color] || 'btn-secondary';
+}
+
+// Setup category button click handlers
+function setupCategorySelect(groupId, inputId) {
+    const group = document.getElementById(groupId);
+    const input = document.getElementById(inputId);
+    if (group && input) {
+        group.querySelectorAll('.category-select-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                input.value = btn.getAttribute('data-value');
+            });
+        });
+        // Set default active (custom or first available)
+        const defaultBtn = group.querySelector('.category-select-btn[data-value="custom"]') || 
+                          group.querySelector('.category-select-btn');
+        if (defaultBtn) {
+            defaultBtn.classList.add('active');
+            input.value = defaultBtn.getAttribute('data-value');
+        }
+    }
 }
 
 // Function to dynamically create category buttons in a group
@@ -691,13 +701,36 @@ function setPairlistEditMode(enabled) {
     document.getElementById('cancelEditPairlistBtn').classList.toggle('d-none', !enabled);
     document.getElementById('addPairInput').classList.toggle('d-none', !enabled);
     document.getElementById('jsonPairlistEditor').readOnly = !enabled;
-    // Category selector: enable/disable buttons
-    const group = document.getElementById('pairlistCategoryGroup');
-    if (group) {
-        group.querySelectorAll('.category-select-btn').forEach(btn => {
+    
+    // Category selector: enable/disable buttons in view/edit modal
+    const editGroup = document.getElementById('editCategoryGroup');
+    if (editGroup) {
+        editGroup.querySelectorAll('.category-select-btn').forEach(btn => {
+            const isActive = btn.classList.contains('active');
             btn.disabled = !enabled;
+            
+            // In view mode: grey out non-active buttons, keep active button visible
+            if (!enabled) {
+                if (!isActive) {
+                    // Grey out non-active buttons with stronger styling
+                    btn.style.opacity = '0.3';
+                    btn.style.cursor = 'not-allowed';
+                    btn.style.pointerEvents = 'none';
+                } else {
+                    // Keep active button fully visible
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'not-allowed';
+                    btn.style.pointerEvents = 'none';
+                }
+            } else {
+                // In edit mode: all buttons fully interactive
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                btn.style.pointerEvents = 'auto';
+            }
         });
     }
+    
     renderPairChips(currentPairlistPairs, enabled);
 }
 
@@ -708,11 +741,10 @@ function viewEditPairlist(filename, category = 'custom') {
     currentPairlistFile = filename;
     document.getElementById('viewEditPairlistTitle').textContent = 'Pairlist: ' + filename;
     document.getElementById('viewEditPairlistName').value = filename;
-    setPairlistEditMode(false);
     document.getElementById('jsonValidationMsg').style.display = 'none';
     document.getElementById('jsonValidationMsg').textContent = '';
     
-    // Set the category in the edit modal
+    // Set the category in the edit modal FIRST (before setPairlistEditMode)
     const editCategoryGroup = document.getElementById('editCategoryGroup');
     const editCategoryInput = document.getElementById('editCategorySelect');
     if (editCategoryGroup && editCategoryInput) {
@@ -723,6 +755,9 @@ function viewEditPairlist(filename, category = 'custom') {
             editCategoryInput.value = category;
         }
     }
+    
+    // Now set edit mode to false (this will grey out non-active buttons)
+    setPairlistEditMode(false);
     
     fetch(`/api/pairlist/${filename}`)
         .then(r => r.json())
@@ -788,65 +823,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Dynamically render category buttons for upload modal
-    function renderUploadCategoryButtons() {
-        fetch('/config/user_config.json')
-            .then(r => r.json())
-            .then(config => {
-                const group = document.getElementById('uploadPairlistCategoryGroup');
-                if (!group) return;
-                group.innerHTML = '';
-                const cats = (config.pairlists && config.pairlists.categories) ? config.pairlists.categories : [];
-                cats.forEach(cat => {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'btn category-select-btn w-20';
-                    btn.style.background = cat.color || '#6c757d';
-                    btn.style.color = '#fff';
-                    btn.setAttribute('data-value', cat.name);
-                    btn.textContent = cat.name;
-                    btn.onclick = function() {
-                        group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                        document.getElementById('uploadPairlistCategory').value = cat.name;
-                    };
-                    group.appendChild(btn);
-                });
-                // Set default active
-                if (group.querySelector('.category-select-btn')) {
-                    group.querySelector('.category-select-btn').classList.add('active');
-                    document.getElementById('uploadPairlistCategory').value = group.querySelector('.category-select-btn').getAttribute('data-value');
-                }
-            });
-    }
-    // Render on modal open
-    const uploadModal = document.getElementById('uploadPairlistModal');
-    if (uploadModal) {
-        uploadModal.addEventListener('show.bs.modal', renderUploadCategoryButtons);
-    }
-
-    // Setup category button groups (setupCategorySelect is defined in the createCategoryButtons function)
-    function setupCategorySelect(groupId, inputId) {
-        const group = document.getElementById(groupId);
-        const input = document.getElementById(inputId);
-        if (group && input) {
-            group.querySelectorAll('.category-select-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    input.value = btn.getAttribute('data-value');
-                });
-            });
-            // Set default active (custom or first available)
-            const defaultBtn = group.querySelector('.category-select-btn[data-value="custom"]') || 
-                              group.querySelector('.category-select-btn');
-            if (defaultBtn) {
-                defaultBtn.classList.add('active');
-                input.value = defaultBtn.getAttribute('data-value');
-            }
-        }
-    }
-    
     // Initialize all category button groups dynamically
     createCategoryButtons('createCategoryGroup', 'categorySelect');
     createCategoryButtons('editCategoryGroup', 'editCategorySelect');
@@ -891,7 +867,7 @@ function savePairlistEdits() {
         return;
     }
     // Get selected category from hidden input
-    const category = document.getElementById('pairlistCategory') ? document.getElementById('pairlistCategory').value : 'custom';
+    const category = document.getElementById('editCategorySelect') ? document.getElementById('editCategorySelect').value : 'custom';
     fetch(`/api/pairlist/${currentPairlistFile}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

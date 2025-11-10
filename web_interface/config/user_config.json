@@ -1,30 +1,78 @@
 {
-    "pairlists": {
-        "categories": [
-            {
-                "name": "custom",
-                "color": "#198754"
-            },
-            {
-                "name": "freqai",
-                "color": "#0dcaf0"
-            },
-            {
-                "name": "example",
-                "color": "#ffc107"
-            },
-            {
-                "name": "test",
-                "color": "#c757d3"
-            },
-            {
-                "name": "azrazr",
-                "color": "#6c757d"
-            }
-        ],
-        "file_categories": {
-            "binance_all_futures.json": "example"
-        }
-    },
-    "global_settings": {}
+  "configs": {
+    "categories": [
+      {
+        "color": "#198754",
+        "name": "custom"
+      },
+      {
+        "color": "#dc3545",
+        "name": "live"
+      },
+      {
+        "color": "#0dcaf0",
+        "name": "dry-run"
+      },
+      {
+        "color": "#ffc107",
+        "name": "backtest"
+      },
+      {
+        "color": "#6c757d",
+        "name": "example"
+      }
+    ],
+    "file_categories": {}
+  },
+  "global_settings": {},
+  "pairlists": {
+    "categories": [
+      {
+        "color": "#198754",
+        "name": "custom"
+      },
+      {
+        "color": "#0dcaf0",
+        "name": "freqai"
+      },
+      {
+        "color": "#ffc107",
+        "name": "example"
+      },
+      {
+        "color": "#c757d3",
+        "name": "test"
+      },
+      {
+        "color": "#6c757d",
+        "name": "azrazr"
+      },
+      {
+        "name": "aze",
+        "color": "#3387d1"
+      }
+    ],
+    "file_categories": {}
+  },
+  "strategies": {
+    "categories": [
+      {
+        "color": "#198754",
+        "name": "custom"
+      },
+      {
+        "color": "#0dcaf0",
+        "name": "freqai"
+      },
+      {
+        "color": "#ffc107",
+        "name": "example"
+      },
+      {
+        "color": "#c757d3",
+        "name": "test"
+      }
+    ],
+    "file_categories": {}
+  }
 }

@@ -7,15 +7,6 @@ document.addEventListener('DOMContentLoaded', function() {
             createPairlistVisual();
         });
     }
-        // Ensure categories are loaded and picker is rendered when create modal is opened
-        const createModal = document.getElementById('createPairlistModal');
-        if (createModal) {
-            createModal.addEventListener('show.bs.modal', async function() {
-                // Always reload categories from config for freshness
-                await loadPairlistCategories();
-                renderCategorySelectButtons('pairlistCategoryGroup', 'pairlistCategory');
-            });
-        }
 });
 
 // --- Consolidated Pairlist Creation Logic ---
@@ -24,7 +15,7 @@ window.createPairlistVisual = async function() {
     let pairs = Array.from(document.querySelectorAll('#createPairChipsContainer .chip'))
         .map(chip => chip.textContent.trim())
         .filter(Boolean);
-    const category = document.getElementById('pairlistCategory').value;
+    const category = document.getElementById('categorySelect').value;
     // If JSON tab is active, sync from JSON editor
     const jsonTab = document.getElementById('create-json-tab');
     if (jsonTab && jsonTab.classList.contains('active')) {
@@ -55,17 +46,25 @@ window.createPairlistVisual = async function() {
         showError('Pairlist contains nested arrays or objects. Only flat arrays of strings are allowed.');
         return;
     }
-    // Check for filename conflict
-    let conflict = false;
+    
+    // Save new pairlist
     try {
-        const resp = await fetch(`/api/pairlist/${encodeURIComponent(name)}`);
-        if (resp.ok) conflict = true;
-    } catch {}
-    if (conflict) {
-        showPairlistConflictModal(name, pairs);
-    } else {
-        saveUploadedPairlist(name, pairs);
-    }
+            const response = await fetch(`/api/pairlist/${encodeURIComponent(name)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pairs: pairs, category: category })
+            });
+            const data = await response.json();
+            if (data.success) {
+                closeModalById('createPairlistModal');
+                showSuccess('Pairlist created successfully!');
+                refreshData();
+            } else {
+                showError('Failed to create pairlist: ' + (data.error || 'Unknown error'));
+            }
+        } catch (error) {
+            showError('Failed to create pairlist: ' + error.message);
+        }
 }
 
 
@@ -128,8 +127,8 @@ function getCategoryColor(name) {
 // Utility: render category filter buttons (for filter bar)
 function renderCategoryFilterButtons() {
     const filterGroups = [
-        document.getElementById('categoryFilterGroup'),
-        document.getElementById('categoryFilterGroupMobile')
+        document.getElementById('pairlistCategoryFilterGroup'),
+        document.getElementById('pairlistCategoryFilterGroupMobile')
     ];
     filterGroups.forEach(group => {
         if (!group) return;
@@ -159,34 +158,9 @@ function renderCategoryFilterButtons() {
     });
 }
 
-// Utility: render category select buttons (for modals)
-function renderCategorySelectButtons(groupId, inputId) {
-    const group = document.getElementById(groupId);
-    const input = document.getElementById(inputId);
-    if (!group || !input) return;
-    group.innerHTML = '';
-    (pairlistCategories || []).forEach(cat => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn category-select-btn w-20';
-        btn.setAttribute('data-value', cat.name);
-        btn.style.background = cat.color || '#6c757d';
-        btn.style.color = '#fff';
-        btn.textContent = cat.name;
-        btn.onclick = function() {
-            input.value = cat.name;
-            // Remove active from all, add to this
-            group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        };
-        group.appendChild(btn);
-    });
-    // Set initial value
-    if (pairlistCategories.length > 0) {
-        input.value = pairlistCategories[0].name;
-        group.querySelector('.category-select-btn').classList.add('active');
-    }
-}
+// NOTE: Modal category button rendering is handled by inline code in pairlists.html
+// using PAIRLIST_CATEGORIES from server-side Jinja template rendering.
+// This ensures buttons are rendered with correct IDs and up-to-date category data.
 
 // Utility: get category for a pairlist file (using file_categories, default to 'custom')
 function getFileCategory(filename) {
@@ -215,10 +189,8 @@ async function loadPairlistCategories() {
     }
     renderPairlistCategoryList();
     renderCategoryFilterButtons();
-    setupCategoryFilter('categoryFilterGroup');
-    setupCategoryFilter('categoryFilterGroupMobile');
-    renderCategorySelectButtons('pairlistCategoryGroup', 'pairlistCategory');
-    renderCategorySelectButtons('clonePairlistCategoryGroup', 'clonePairlistCategory');
+    setupCategoryFilter('pairlistCategoryFilterGroup');
+    setupCategoryFilter('pairlistCategoryFilterGroupMobile');
 }
 
 function renderPairlistCategoryList() {
@@ -274,15 +246,37 @@ function renderPairlistCategoryList() {
 }
 
 async function savePairlistCategories() {
-    // Save to user_config.json
+    // Save to user_config.json with NEW nested format
     try {
+        // First load the current config to preserve other settings
+        const currentResp = await fetch('/config/user_config.json');
+        const currentConfig = await currentResp.json();
+        
+        // Update pairlists.categories with our changes
+        currentConfig.pairlists = currentConfig.pairlists || {};
+        currentConfig.pairlists.categories = pairlistCategories;
+        currentConfig.pairlists.file_categories = currentConfig.pairlists.file_categories || pairlistFileCategories || {};
+        
+        // Ensure other sections exist
+        currentConfig.strategies = currentConfig.strategies || {categories: [], file_categories: {}};
+        currentConfig.configs = currentConfig.configs || {categories: [], file_categories: {}};
+        currentConfig.global_settings = currentConfig.global_settings || {};
+        
+        // Save the complete config
         const resp = await fetch('/config/user_config.json', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pairlist_categories: pairlistCategories })
+            body: JSON.stringify(currentConfig)
         });
+        
         if (!resp.ok) throw new Error('Failed to save categories');
-        showSuccess('Categories saved');
+        
+        showSuccess('Categories saved successfully! Reloading page...');
+        
+        // Reload the page after a short delay so user sees success message
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
     } catch (err) {
         showError('Failed to save categories: ' + err.message);
     }

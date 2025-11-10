@@ -55,8 +55,10 @@ export class CategoryManager {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    pairlist_categories: this.categories,
-                    pairlist_file_categories: this.fileCategories 
+                    pairlists: {
+                        categories: this.categories,
+                        file_categories: this.fileCategories
+                    }
                 })
             });
             if (!resp.ok) throw new Error('Failed to save categories');
@@ -124,6 +126,53 @@ export class CategoryManager {
                     item.style.display = 'none';
                 }
             });
+        });
+    }
+
+    renderCategorySelectButtons(containerId, selectedCategory = 'custom', hiddenInputId = null) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        // Render category buttons dynamically from user_config.json
+        this.categories.forEach(cat => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn category-select-btn w-20';
+            btn.setAttribute('data-value', cat.name);
+            btn.style.background = cat.color || '#6c757d';
+            btn.style.color = '#fff';
+            btn.textContent = cat.name.charAt(0).toUpperCase() + cat.name.slice(1);
+            
+            // Set active state if this is the selected category
+            if (cat.name === selectedCategory) {
+                btn.classList.add('active');
+            }
+            
+            container.appendChild(btn);
+        });
+        
+        // Setup click handlers for category selection
+        container.addEventListener('click', (e) => {
+            const btn = e.target.closest('.category-select-btn');
+            if (!btn) return;
+            
+            const value = btn.getAttribute('data-value');
+            
+            // Update button states
+            container.querySelectorAll('.category-select-btn').forEach(b => 
+                b.classList.remove('active')
+            );
+            btn.classList.add('active');
+            
+            // Update hidden input if provided
+            if (hiddenInputId) {
+                const hiddenInput = document.getElementById(hiddenInputId);
+                if (hiddenInput) {
+                    hiddenInput.value = value;
+                }
+            }
         });
     }
 }

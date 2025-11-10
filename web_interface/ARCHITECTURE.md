@@ -2066,68 +2066,239 @@ web_interface/
 
 ---
 
-### [A-5.10] Fix Category System Dynamic Loading & Save Format (Status: In-Progress)
+### [A-5.30] Add View Mode Category Picker Disabled State (Status: Done)
 
-**Date (UTC):** 2025-11-10 03:30  
+**Date (UTC):** 2025-11-10 04:15  
 **Owner:** Copilot  
-**Scope:** `static/js/services/category.service.js`, `templates/pairlists.html`, `static/js/pages/pairlists.js`
+**Scope:** `templates/pairlists.html` (setPairlistEditMode function)
 
-**Rationale:** **USER-REPORTED ISSUE:** Category system has two critical bugs:
-1. **Save Format Bug:** `CategoryManager.saveCategories()` sends wrong JSON structure `{pairlist_categories, pairlist_file_categories}` but backend expects `{pairlists: {categories, file_categories}}` per user_config.json format
-2. **Hardcoded Modal Buttons:** Category selection buttons in Create/Edit/Clone/Upload modals are hardcoded HTML (lines 214-218, 271-275, 388-392, 444-448) instead of dynamically loaded from user_config.json like filter buttons
+**Rationale:** **USER-REQUESTED UX ENHANCEMENT:** In the View/Edit pairlist modal, when in view mode (before clicking "Edit"), the category picker should show which category the pairlist belongs to while preventing accidental changes. Specifically:
+- Active/selected category button should remain fully visible (show which category it is)
+- Non-active category buttons should be greyed out (opacity 0.3) and disabled
+- All buttons disabled to prevent clicking in view mode
+- When user clicks "Edit", all buttons become interactive again
 
-These bugs break the unified category management system established in A-1.10/A-1.20.
-
-**Current Issues:**
-- ❌ Saving categories fails silently (wrong JSON keys)
-- ❌ Modal buttons don't reflect custom categories from settings
-- ❌ Hardcoded buttons show old/wrong category lists
-- ❌ No color synchronization between filters and modal buttons
+**Current Issue:**
+- Category picker in view mode allows clicking (should be disabled)
+- No visual indication of which buttons are clickable vs display-only
 
 **Steps:**
-1. Fix `CategoryManager.saveCategories()` in category.service.js:
-   - Change from: `{pairlist_categories, pairlist_file_categories}`
-   - Change to: `{pairlists: {categories, file_categories}}`
-2. Add `renderCategorySelectButtons(containerId, selectedCategory)` method to CategoryManager
-3. Replace 4 hardcoded button groups in pairlists.html with `<div>` containers with IDs
-4. Call `renderCategorySelectButtons()` in modal show events (pairlists.js)
-5. Update button click handlers to work with dynamic buttons
-6. Test: Create category in settings → should appear in all modals
+1. Update `setPairlistEditMode(enabled)` function in pairlists.html
+2. Add inline style logic to differentiate active vs non-active buttons:
+   - View mode (enabled=false): Active button `opacity: 1`, non-active `opacity: 0.3`
+   - Both states: `pointerEvents: none`, `cursor: not-allowed` in view mode
+   - Edit mode (enabled=true): All buttons `opacity: 1`, `cursor: pointer`, `pointerEvents: auto`
+3. Move `setPairlistEditMode(false)` call to AFTER category button activation in `viewEditPairlist()`
+   - This ensures active class is set before greying out non-active buttons
 
 **Verification:**
-- **Commands:**
-  ```powershell
-  # Check modal buttons are no longer hardcoded
-  Select-String -Pattern 'btn btn-success category-select-btn w-20.*data-value="custom"' -Path templates/pairlists.html
-  # Should return 0 matches (all replaced with dynamic containers)
+- **Manual Testing:**
+  1. Open pairlists page, view any pairlist (View button)
+  2. Verify selected category button is fully visible (opacity 1)
+  3. Verify other category buttons are greyed out (opacity 0.3)
+  4. Try clicking any category button → should not respond (disabled)
+  5. Click "Edit" button
+  6. Verify all category buttons become fully visible and clickable
+  7. Change category and save → should persist
   
-  # Test category system end-to-end
-  # 1. Add new category "testing" with color #ff00ff in settings modal
-  # 2. Create new pairlist → should see "testing" button in modal
-  # 3. Select "testing" and save → should persist in user_config.json
-  # 4. Reload page → pairlist should show "testing" category
-  ```
 - **Criteria:**
-  - ✅ saveCategories() sends correct JSON structure matching user_config.json
-  - ✅ Modal buttons dynamically rendered from user_config.json
-  - ✅ Custom categories appear in all 4 modals (Create/Edit/Clone/Upload)
-  - ✅ Colors match between filter buttons and modal buttons
-  - ✅ Category selection persists correctly in file_categories
-  - ✅ No hardcoded category buttons remain in HTML
+  - ✅ View mode: Active category button clearly visible (opacity 1)
+  - ✅ View mode: Non-active buttons greyed out (opacity 0.3)
+  - ✅ View mode: All buttons disabled (no pointer events)
+  - ✅ Edit mode: All buttons fully visible and interactive
+  - ✅ Cursor changes appropriately (not-allowed vs pointer)
+  - ✅ No console errors
 
 **Rollback:** 
 ```powershell
 git revert <commit-hash>
-# Restores hardcoded buttons and old save format
+# Restores simpler disabled state (all buttons same opacity)
 ```
 
-**Commit:** `<TBD - will bundle with A-3.20>`
+**Commit:** `<TBD - will bundle with A-5.20>`
 
 **Notes:** 
-- This fixes the last major Stage A issue blocking approval gate
-- Makes pairlist category system fully dynamic and user-configurable
-- Paves way for strategies/configs to adopt same pattern in Stage C
-- After this: Stage A is complete and ready for approval gate verification
+- UX improvement requested after user tested A-5.20 implementation
+- Uses inline styles for strong visual effect (opacity 0.3 vs Bootstrap opacity-50)
+- Ensures user can clearly see which category is selected in view mode
+- Prevents accidental category changes when just viewing pairlist details
+- Order of operations matters: must set active class BEFORE calling setPairlistEditMode()
+
+---
+
+### [A-5.20] Remove GET Endpoint Config Pollution (Status: Done)
+
+**Date (UTC):** 2025-11-10 04:00  
+**Owner:** Copilot  
+**Scope:** `app.py` (GET /config/user_config.json endpoint, lines 2727-2749)
+
+**Rationale:** **ROOT CAUSE DISCOVERED:** The GET `/config/user_config.json` endpoint was adding intermediate format keys (`pairlist_categories`) for "frontend compatibility" (lines 2740-2748). When JavaScript saves the config back via PUT, it includes this polluted data, causing the config to have mixed old/new/intermediate formats coexisting. This breaks the category system because:
+1. GET endpoint adds `pairlist_categories` array from OLD format keys (categories/category_colors)
+2. Frontend JavaScript receives polluted config with both formats
+3. Frontend saves entire config back → pollution persists in file
+4. Result: user_config.json contains duplicate/conflicting category data
+
+**Discovery Process:**
+- User reported config had mixed formats after save
+- Grep search found 11 matches for "pairlist_categories"
+- Found GET endpoint at lines 2740-2748 adding this key
+- This "compatibility layer" was polluting every GET request
+
+**Steps:**
+1. Remove lines 2740-2748 (compatibility layer that adds pairlist_categories)
+2. Update GET endpoint to return clean NEW nested format only
+3. Add default structure if config doesn't exist (NEW format)
+4. Ensure all required sections exist (pairlists, strategies, configs, global_settings)
+5. Use logger.error for parse failures instead of silent fallback
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Check no code adds pairlist_categories anymore
+  Select-String -Pattern "pairlist_categories" -Path app.py
+  # Should return 0 matches
+  
+  # Test GET endpoint returns clean format
+  curl http://localhost:5000/config/user_config.json | jq 'keys'
+  # Should return: ["configs", "global_settings", "pairlists", "strategies"]
+  # Should NOT include: pairlist_categories, categories, category_colors
+  ```
+- **Manual Testing:**
+  1. Delete user_config.json to test default creation
+  2. Access pairlists page → GET endpoint creates config
+  3. Check user_config.json has clean NEW format only
+  4. Add category in settings modal and save
+  5. Check user_config.json still has clean NEW format
+  6. Reload page → categories should persist correctly
+  
+- **Criteria:**
+  - ✅ GET endpoint returns clean NEW nested format
+  - ✅ No intermediate format keys added (pairlist_categories removed)
+  - ✅ Default config uses NEW format structure
+  - ✅ Save/reload cycle preserves clean format
+  - ✅ No config pollution after multiple operations
+  - ✅ All sections present (pairlists, strategies, configs, global_settings)
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# Restores compatibility layer (though it pollutes config)
+```
+
+**Commit:** `<TBD - will bundle with A-5.10>`
+
+**Notes:** 
+- **CRITICAL FIX:** This was the root cause of persistent config corruption
+- Removed "frontend compatibility" layer that was actually causing incompatibility
+- GET and PUT endpoints now both use clean NEW nested format
+- Config pollution cycle eliminated: GET clean → Save clean → GET clean
+- Frontend already expects NEW format (Jinja uses settings.pairlists.categories)
+- Intermediate format (pairlist_categories) was never actually needed
+
+---
+
+### [A-5.10] Fix Category System Dynamic Loading & Save Format (Status: Done)
+
+**Date (UTC):** 2025-11-10 03:30  
+**Owner:** Copilot  
+**Scope:** `app.py` (lines 2751-2777 PUT endpoint, 2727-2749 GET endpoint), `static/js/app.js` (savePairlistCategories), `templates/pairlists.html` (PAIRLIST_CATEGORIES, createCategoryButtons, all modal IDs)
+
+**Rationale:** **COMPLETE CATEGORY SYSTEM OVERHAUL:** After multi-phase debugging journey, discovered and fixed fundamental architecture issues:
+
+**Phase 1: Discovery** - User reported "NOTHING WORKING" - no category buttons rendering
+**Phase 2: Root Cause Analysis** - Found 3 conflicting category systems competing for control:
+1. app.js client-side fetch from /config/user_config.json
+2. pairlists.html Jinja inline rendering from settings
+3. category.service.js ES6 module (unused)
+
+**Phase 3: Strategic Decision** - Chose Jinja server-side rendering as single source of truth:
+- Data flow: Server render_template(settings) → Jinja {{ settings.pairlists.categories | tojson }} → JavaScript constant → DOM
+- Eliminates async race conditions and stale data issues
+- Page reload after save ensures Jinja re-renders with latest data
+
+**Phase 4-8: Systematic Fixes:**
+1. Removed duplicate renderCategorySelectButtons() from app.js (wrong implementation)
+2. Fixed function ordering in pairlists.html (setupCategorySelect before createCategoryButtons)
+3. Fixed modal container IDs: editCategorySelect, cloneCategorySelect, uploadCategorySelect
+4. Fixed filter button IDs: pairlistCategoryFilterGroup (missing "pairlist" prefix)
+5. Re-migrated user_config.json from OLD flat format to NEW nested format
+6. Added missing saveUploadedPairlist() inline API call
+7. Fixed PUT endpoint to preserve nested format (was converting to OLD flat)
+8. Fixed savePairlistCategories() to send correct structure and reload page
+9. **CRITICAL:** Fixed GET endpoint removing pollution source (pairlist_categories)
+10. Fixed category picker disabled state in view mode with visual distinction
+
+**Final Architecture:**
+```
+Server (app.py)
+  └─> render_template(settings=user_config)
+       └─> Jinja (pairlists.html)
+            └─> const PAIRLIST_CATEGORIES = {{ settings.pairlists.categories | tojson }}
+                 └─> createCategoryButtons() → DOM rendering
+                      └─> setupCategorySelect() → click handlers
+```
+
+**Completed Steps:**
+1. ✅ Eliminated 3 conflicting category systems, chose Jinja as single source
+2. ✅ Fixed user_config.json format (OLD flat → NEW nested)
+3. ✅ Fixed all modal container IDs (Create/Edit/Clone/Upload)
+4. ✅ Fixed filter button IDs with correct "pairlist" prefix
+5. ✅ Fixed backend PUT endpoint to preserve nested format
+6. ✅ Fixed frontend save function to send complete nested structure
+7. ✅ Added page reload after save to re-render Jinja template
+8. ✅ Removed GET endpoint pollution (pairlist_categories compatibility layer)
+9. ✅ Fixed view mode category picker (active button visible, others greyed out)
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Verify no old format keys in config
+  Select-String -Pattern "category_colors|^  \"categories\":" -Path config/user_config.json
+  # Should return 0 matches
+  
+  # Verify GET endpoint clean
+  curl http://localhost:5000/config/user_config.json | jq 'has("pairlist_categories")'
+  # Should return: false
+  
+  # Test complete workflow
+  # 1. Open settings modal, add category "azrazr" with purple color
+  # 2. Save → page reloads
+  # 3. All modals show "azrazr" button with purple color
+  # 4. Filter buttons show "azrazr" option
+  # 5. Create pairlist with "azrazr" category → saves correctly
+  # 6. View pairlist → shows "azrazr" badge with purple color
+  # 7. View mode: "azrazr" button visible, others greyed out
+  # 8. Edit mode: all buttons interactive
+  ```
+- **Criteria:**
+  - ✅ Category buttons render in all 4 modals (Create/Edit/Clone/Upload)
+  - ✅ Filter buttons render on page (desktop + mobile)
+  - ✅ Custom categories from settings appear in all locations
+  - ✅ Colors synchronized across filters, modals, and badges
+  - ✅ Save categories → page reloads → changes persist
+  - ✅ Create pairlist → category persists in file_categories
+  - ✅ Config stays clean after multiple save/reload cycles
+  - ✅ View mode: active button visible, others greyed out
+  - ✅ Edit mode: all buttons interactive
+  - ✅ No console errors or server exceptions
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# Restores all previous issues (3 conflicting systems, wrong IDs, config pollution)
+```
+
+**Commit:** `<TBD - will commit complete A-5.x series>`
+
+**Notes:** 
+- **MAJOR MILESTONE:** Complete category system overhaul across 10 sub-actions
+- Fixed fundamental architecture issues, not just bugs
+- Eliminated race conditions by removing async category fetching
+- Single source of truth (Jinja) eliminates synchronization problems
+- Page reload pattern ensures UI always matches backend state
+- Config format now stable: NEW nested format enforced by both GET and PUT
+- ✅ **STAGE A NOW COMPLETE** - ready for approval gate verification
+- Next: Commit, then apply same pattern to strategies and configs in Stage C
 
 ---
 
@@ -2605,6 +2776,80 @@ git checkout df3fab7~1 -- web_interface\ARCHITECTURE.md web_interface\.gitignore
 - ✅ Future actions will follow this exact template format
 - ✅ Placed at end to avoid renumbering all existing sections
 - ✅ Action completed successfully, ready for Stage A refactoring
+
+---
+
+### Next Steps: Stage B & C Planning
+
+**Stage A Status: ✅ COMPLETE**
+- All file-based resources working correctly
+- Category system fully functional with dynamic loading
+- Config format stable (NEW nested format enforced)
+- Logger migration complete (structured logging throughout)
+- Utilities extracted (file_operations, category_manager, logger)
+
+**Immediate Priority: Commit & Document A-5.x Series**
+- Commit message: `[A-5.10-5.30] fix(categories): complete system overhaul with proper persistence`
+  * Fixed 3 conflicting category systems (chose Jinja as single source of truth)
+  * Fixed all modal and filter button IDs
+  * Fixed backend GET/PUT endpoints to preserve nested format
+  * Fixed frontend save function with page reload
+  * Added view mode disabled state with visual distinction
+- Update todo list to mark A-5.x complete
+- Run Stage A Approval Gate verification
+
+**Stage B Priorities (Backend Abstraction):**
+1. **[B-1.10] Create FileResourceProvider Base Class**
+   - Extract common patterns from get_available_pairlists/strategies/configs
+   - Methods: list_files(), get_file(), save_file(), delete_file(), clone_file()
+   - Each resource type inherits and overrides metadata extraction
+   - Reduces ~150 lines of duplication
+
+2. **[B-1.20] Create PairlistProvider, StrategyProvider, ConfigProvider**
+   - Concrete implementations of FileResourceProvider
+   - Override get_metadata() for resource-specific fields
+   - Move from app.py to utils/providers/
+
+3. **[B-2.10] Refactor API Routes to Use Providers**
+   - Replace inline file operations with provider method calls
+   - Reduces each CRUD route from ~15 lines to ~5 lines
+   - **Use feature flag** to toggle between old and new implementations
+
+**Stage C Priorities (Frontend Unification):**
+1. **[C-1.10] Extract Strategies Inline JS to Module**
+   - Move ~1400 lines from strategies.html to static/js/pages/strategies.js
+   - Follow pairlists.js pattern established in A-5.10
+   - Enable ES6 module imports
+
+2. **[C-1.20] Extract Configs Inline JS to Module**
+   - Move ~1100 lines from configs.html to static/js/pages/configs.js
+   - Standardize modal management patterns
+
+3. **[C-2.10] Extend Category System to Strategies**
+   - Replace hardcoded buttons with dynamic rendering from user_config.json
+   - Use STRATEGY_CATEGORIES constant from Jinja (same pattern as pairlists)
+   - Update settings modal to manage strategy categories
+
+4. **[C-2.20] Extend Category System to Configs**
+   - Replace hardcoded buttons with dynamic rendering
+   - Use CONFIG_CATEGORIES constant from Jinja
+   - Unified category management across all resource types
+
+5. **[C-3.10] Create Shared Modal Component**
+   - Extract common modal patterns (Create/Edit/Clone/Upload)
+   - Parameterize resource type and editor type (JSON vs code vs YAML)
+   - Reduces modal code duplication by ~60%
+
+**Risk Mitigation:**
+- Stage B uses feature flags (can roll back without deployment)
+- Stage C extracts to modules (old inline code remains, removed in final cleanup)
+- Each action has explicit rollback strategy documented
+
+**Success Metrics:**
+- Backend: Code duplication reduced by 150+ lines (Stage B)
+- Frontend: Inline script blocks <100 lines each (Stage C)
+- Category system: 100% dynamic from user_config.json (all resource types)
+- Performance: No degradation vs baseline (verified with benchmarks)
 
 ---
 

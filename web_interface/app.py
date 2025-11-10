@@ -137,9 +137,8 @@ def load_settings():
         with open(config_path, 'r') as f:
             config = json.load(f)
         
-        # Clean up any legacy cloudflare settings
-        if 'global_settings' in config and 'cloudflare' in config.get('global_settings', {}):
-            del config['global_settings']['cloudflare']
+        if 'global_settings' in config.get('global_settings', {}):
+            del config['global_settings']
         
         # Ensure global_settings exists
         if 'global_settings' not in config:
@@ -2729,46 +2728,86 @@ def upload_config():
 def get_user_config():
     config_path = Path(__file__).parent / 'config' / 'user_config.json'
     if not config_path.exists():
-        # Return a default config if not found
-        data = {"categories": [], "category_colors": {}}
+        # Return a default config with NEW nested structure
+        data = {
+            "pairlists": {
+                "categories": [],
+                "file_categories": {}
+            },
+            "strategies": {
+                "categories": [],
+                "file_categories": {}
+            },
+            "configs": {
+                "categories": [],
+                "file_categories": {}
+            },
+            "global_settings": {}
+        }
     else:
         with open(config_path, 'r', encoding='utf-8') as f:
             try:
                 data = json.load(f)
             except Exception:
-                data = {"categories": [], "category_colors": {}}
+                logger.error("Failed to parse user_config.json, returning default structure")
+                data = {
+                    "pairlists": {
+                        "categories": [],
+                        "file_categories": {}
+                    },
+                    "strategies": {
+                        "categories": [],
+                        "file_categories": {}
+                    },
+                    "configs": {
+                        "categories": [],
+                        "file_categories": {}
+                    },
+                    "global_settings": {}
+                }
 
-    # Compose pairlist_categories for frontend compatibility
-    categories = data.get("categories", [])
-    category_colors = data.get("category_colors", {})
-    pairlist_categories = [
-        {"name": name, "color": category_colors.get(name, "#6c757d")}
-        for name in categories
-    ]
-    # Return both the original fields and the new array for backward compatibility
-    data["pairlist_categories"] = pairlist_categories
+    # Ensure all required sections exist
+    if "pairlists" not in data:
+        data["pairlists"] = {"categories": [], "file_categories": {}}
+    if "strategies" not in data:
+        data["strategies"] = {"categories": [], "file_categories": {}}
+    if "configs" not in data:
+        data["configs"] = {"categories": [], "file_categories": {}}
+    if "global_settings" not in data:
+        data["global_settings"] = {}
+    
     return jsonify(data)
 
 @app.route('/config/user_config.json', methods=['PUT'])
 def save_user_config():
+    """Save user configuration with NEW nested format"""
     config_path = Path(__file__).parent / 'config' / 'user_config.json'
     try:
         data = request.get_json(force=True)
-        # If pairlist_categories is present, convert to categories and category_colors
-        if "pairlist_categories" in data:
-            categories = [cat["name"] for cat in data["pairlist_categories"] if "name" in cat]
-            category_colors = {cat["name"]: cat.get("color", "#6c757d") for cat in data["pairlist_categories"] if "name" in cat}
-            data["categories"] = categories
-            data["category_colors"] = category_colors
-        # Only keep the expected fields
-        filtered = {
-            "categories": data.get("categories", []),
-            "category_colors": data.get("category_colors", {})
-        }
+        
+        # Ensure the new nested structure exists
+        if 'pairlists' not in data:
+            data['pairlists'] = {}
+        if 'categories' not in data['pairlists']:
+            data['pairlists']['categories'] = []
+        if 'file_categories' not in data['pairlists']:
+            data['pairlists']['file_categories'] = {}
+        
+        if 'strategies' not in data:
+            data['strategies'] = {'categories': [], 'file_categories': {}}
+        if 'configs' not in data:
+            data['configs'] = {'categories': [], 'file_categories': {}}
+        if 'global_settings' not in data:
+            data['global_settings'] = {}
+        
+        # Save the full nested structure
         with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(filtered, f, indent=2, ensure_ascii=False)
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        logger.info("User config saved successfully")
         return jsonify({"success": True})
     except Exception as e:
+        logger.error(f"Error saving user config: {e}")
         return jsonify({"success": False, "error": str(e)}), 400
 
 @app.route('/api/docker-compose/update', methods=['POST'])
