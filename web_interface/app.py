@@ -45,49 +45,6 @@ def merge_filter(dict1, dict2):
 
 app.jinja_env.filters['merge'] = merge_filter
 
-# --- Cloudflared Token/Setup API (RESTORED, after app init) ---
-@app.route('/api/cloudflared/token', methods=['POST'])
-def cloudflared_token():
-    config_path = BASE_PATH / 'web_interface' / 'config' / 'user_config.json'
-    data = request.get_json(force=True, silent=True) or {}
-    token = data.get('token', '').strip()
-    if not token:
-        return jsonify({'success': False, 'error': 'No token provided'}), 400
-    # Save token_set = True in config
-    if config_path.exists():
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-    else:
-        config = {"global_settings": {"cloudflare": {}}}
-    cloudflare = config.get('global_settings', {}).get('cloudflare', {})
-    cloudflare['token_set'] = True
-    config['global_settings']['cloudflare'] = cloudflare
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=2)
-    return jsonify({'success': True})
-
-@app.route('/api/cloudflared/setup', methods=['POST'])
-def cloudflared_setup():
-    config_path = BASE_PATH / 'web_interface' / 'config' / 'user_config.json'
-    data = request.get_json(force=True, silent=True) or {}
-    subdomain = data.get('subdomain', '').strip()
-    if not subdomain:
-        return jsonify({'success': False, 'error': 'No subdomain provided'}), 400
-    # Save subdomain and tunnel_name in config
-    if config_path.exists():
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-    else:
-        config = {"global_settings": {"cloudflare": {}}}
-    cloudflare = config.get('global_settings', {}).get('cloudflare', {})
-    cloudflare['subdomain'] = subdomain
-    cloudflare['tunnel_name'] = subdomain.split('.')[0] if '.' in subdomain else subdomain
-    config['global_settings']['cloudflare'] = cloudflare
-    with open(config_path, 'w') as f:
-        json.dump(config, f, indent=2)
-    return jsonify({'success': True, 'subdomain': subdomain})
-
-
 
 
 import json
