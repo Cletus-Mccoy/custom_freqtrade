@@ -8,64 +8,7 @@
       </div>
   <div class="modal-body p-4 d-flex flex-column gap-4" style="overflow-y:auto;">
         <form id="settingsForm">
-          <div>
-            <div class="card shadow-sm overflow-hidden">
-                  <div class="card-header bg-secondary bg-gradient text-white d-flex align-items-center justify-content-between" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#cloudflareCollapse" aria-expanded="false" aria-controls="cloudflareCollapse">
-                <span><i class="fab fa-cloudflare me-2"></i><strong>Cloudflare Tunnel Options</strong></span>
-                <span class="ms-2"><i class="fas fa-chevron-down"></i></span>
-              </div>
-              <div id="cloudflareCollapse" class="collapse">
-                <div class="card-body" style="background-color: #e0e3ea;">
-                  <div id="cloudflareOptions">
-                    <div class="form-check mb-2">
-                      <input class="form-check-input" type="checkbox" id="cloudflareTunnel" name="cloudflare[enabled]" {% if settings and settings.global_settings and settings.global_settings.cloudflare and settings.global_settings.cloudflare.enabled %}checked{% endif %}>
-                      <label class="form-check-label" for="cloudflareTunnel">
-                        Enable Cloudflare Tunnel
-                      </label>
-                    </div>
-                    <div class="form-check mb-2">
-                      <input class="form-check-input" type="checkbox" id="cloudflareAutoStart" name="cloudflare[autostart]" {% if settings and settings.global_settings and settings.global_settings.cloudflare and settings.global_settings.cloudflare.autostart %}checked{% endif %}>
-                      <label class="form-check-label" for="cloudflareAutoStart">
-                        Autostart Tunnel on App Launch
-                      </label>
-                    </div>
-                    <div class="mb-3">
-                      <label for="cloudflareTunnelName" class="form-label">Tunnel Name</label>
-                      <input type="text" class="form-control" id="cloudflareTunnelName" placeholder="Enter tunnel name" value="{{ settings.global_settings.cloudflare.tunnel_name if settings and settings.global_settings and settings.global_settings.cloudflare and settings.global_settings.cloudflare.tunnel_name is defined else '' }}">
-                    </div>
-                    <div class="mb-3">
-                      <label for="cloudflareTunnelToken" class="form-label">Cloudflare Token</label>
-                      <input type="password" class="form-control" id="cloudflareTunnelToken" placeholder="Enter Cloudflare token">
-                      <div class="form-text"><span class="{{ 'text-success' if settings and settings.global_settings and settings.global_settings.cloudflare and settings.global_settings.cloudflare.token_set else 'text-danger' }}">{{ 'Token is set.' if settings and settings.global_settings and settings.global_settings.cloudflare and settings.global_settings.cloudflare.token_set else 'Token not set.' }}</span></div>
-                    </div>
-                    <div class="mb-3">
-                      <label for="cloudflareSubdomain" class="form-label">Tunnel Subdomain (e.g. freqtrade.yourdomain.com)</label>
-                      <div class="input-group">
-                        <input type="text" class="form-control" id="cloudflareSubdomain" placeholder="freqtrade.yourdomain.com" value="{{ settings.global_settings.cloudflare.subdomain if settings and settings.global_settings and settings.global_settings.cloudflare and settings.global_settings.cloudflare.subdomain is defined else '' }}">
-                        <button class="btn btn-outline-primary" type="button" id="cloudflareSetupBtn">Setup Tunnel</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div id="cloudflareSetupFeedback" class="mt-2"></div>
-                  <div id="tunnelControls">
-                    <div class="d-flex align-items-center mb-2" id="tunnelStatusRow"></div>
-                    <div id="tunnelUrlRow"></div>
-                  </div>
-                  <!-- Cloudflare Access Zero Trust Notice (single instance) -->
-                  <div class="alert alert-info mt-3">
-                    <i class="fas fa-info-circle"></i>
-                    <b>Access to this app is protected by Cloudflare Zero Trust.</b><br>
-                    To manage login and access policies (who can log in, allowed emails, login methods), visit your
-                    <a href="https://one.dash.cloudflare.com/" target="_blank">Cloudflare Zero Trust dashboard</a> and edit the Access Application for your tunnel domain.<br>
-                    <b>Current Tunnel Domain:</b>
-                    <span id="cloudflareTunnelDomain">{{ settings.global_settings.cloudflare.subdomain or 'Not available' }}</span>
-                  </div>
-                </div>
-              </div>
-  </div>
-  <!-- Small whitespace between cards -->
-  <div class="settings-whitespace-small"></div>
-  <!-- Freqtrade API Key Management (moved outside Cloudflare card) -->
+          <!-- Freqtrade API Key Management -->
   <div>
   <div class="card shadow-sm overflow-hidden">
                   <div class="card-header bg-secondary bg-gradient text-white d-flex align-items-center justify-content-between" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#apiKeyCollapse" aria-expanded="false" aria-controls="apiKeyCollapse">
@@ -130,19 +73,12 @@
 </div>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    // Save settings only (no token)
+    // Simplified settings form - now only handles API keys
     var form = document.getElementById('settingsForm');
     if (form) {
       form.onsubmit = function(e) {
         e.preventDefault();
-        var cloudflare = {
-          enabled: document.getElementById('cloudflareTunnel').checked,
-          autostart: document.getElementById('cloudflareAutoStart').checked,
-          tunnel_name: document.getElementById('cloudflareTunnelName') ? document.getElementById('cloudflareTunnelName').value.trim() : '',
-          subdomain: document.getElementById('cloudflareSubdomain') ? document.getElementById('cloudflareSubdomain').value.trim() : '',
-          token_set: document.querySelector('#cloudflareTunnelToken').parentElement.querySelector('.form-text span').className === 'text-success'
-        };
-        var grouped = { global_settings: { cloudflare } };
+        var grouped = { global_settings: {} };
         var saveBtn = document.getElementById('saveSettingsBtn');
         saveBtn.disabled = true;
         var originalText = saveBtn.textContent;
@@ -156,7 +92,6 @@
           if (data.success === false || data.error) {
             throw new Error(data.error || 'Save failed');
           }
-          refreshTunnelStatus();
           saveBtn.classList.remove('btn-primary');
           saveBtn.classList.add('btn-success');
           saveBtn.textContent = 'Save Successful';
@@ -175,194 +110,6 @@
         });
       };
     }
-    // Setup Tunnel button: send token (if present) then setup tunnel
-    var setupBtn = document.getElementById('cloudflareSetupBtn');
-    if (setupBtn) {
-      setupBtn.onclick = function() {
-        var subdomain = document.getElementById('cloudflareSubdomain').value.trim();
-        var token = document.getElementById('cloudflareTunnelToken').value.trim();
-        var feedback = document.getElementById('cloudflareSetupFeedback');
-        feedback.innerHTML = '<span class="text-info">Setting up tunnel...</span>';
-        var tokenPromise = Promise.resolve();
-        if (token) {
-          tokenPromise = fetch('/api/cloudflared/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token })
-          }).then(resp => resp.json()).then(data => {
-            if (!data.success) throw new Error(data.error || 'Token save failed');
-          });
-        }
-        tokenPromise.then(function() {
-          // Call new endpoint to setup, save env, and launch container
-          return fetch('/api/cloudflared/setup-and-launch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subdomain, token })
-          });
-        })
-        .then(resp => resp.json())
-        .then(data => {
-          if (data.success) {
-            feedback.innerHTML = '<span class="text-success">Tunnel setup and launch complete for <b>' + data.subdomain + '</b>.</span>';
-            document.getElementById('cloudflareTunnelDomain').innerText = data.subdomain;
-            refreshTunnelStatus();
-            // Refresh token status and tunnel name in modal
-            fetch('/options')
-              .then(resp => resp.json())
-              .then(opts => {
-                var tokenText = document.querySelector('#cloudflareTunnelToken').parentElement.querySelector('.form-text span');
-                if (opts.global_settings && opts.global_settings.cloudflare && opts.global_settings.cloudflare.token_set) {
-                  tokenText.className = 'text-success';
-                  tokenText.textContent = 'Token is set.';
-                } else {
-                  tokenText.className = 'text-danger';
-                  tokenText.textContent = 'Token not set.';
-                }
-                if (opts.global_settings && opts.global_settings.cloudflare && opts.global_settings.cloudflare.tunnel_name) {
-                  document.getElementById('cloudflareTunnelName').value = opts.global_settings.cloudflare.tunnel_name;
-                }
-              });
-          } else {
-            feedback.innerHTML = '<span class="text-danger">Error: ' + (data.error || 'Unknown error') + '</span>';
-          }
-        })
-        .catch((err) => {
-          feedback.innerHTML = '<span class="text-danger">Failed to setup and launch tunnel. ' + (err && err.message ? err.message : '') + '</span>';
-        });
-      };
-    }
-    // Always refresh modal fields with latest settings when modal is shown
-  // (This block was a duplicate and is now removed. All JS is in the main <script> block below.)
-    // Show/hide tunnel controls and autostart based on enable checkbox
-    var tunnelCheckbox = document.getElementById('cloudflareTunnel');
-    var cloudflareCollapse = document.getElementById('cloudflareCollapse');
-    function updateCloudflareOptionsVisibility() {
-      var opts = document.getElementById('cloudflareOptions');
-      if (tunnelCheckbox.checked) {
-        opts.style.display = 'block';
-        if (cloudflareCollapse && !cloudflareCollapse.classList.contains('show')) {
-          var collapseInstance = bootstrap.Collapse.getOrCreateInstance(cloudflareCollapse);
-          collapseInstance.show();
-        }
-      } else {
-        opts.style.display = 'none';
-        if (cloudflareCollapse && cloudflareCollapse.classList.contains('show')) {
-          var collapseInstance = bootstrap.Collapse.getOrCreateInstance(cloudflareCollapse);
-          collapseInstance.hide();
-        }
-      }
-    }
-    if (tunnelCheckbox) {
-      tunnelCheckbox.addEventListener('change', updateCloudflareOptionsVisibility);
-      updateCloudflareOptionsVisibility();
-    }
-
-    // Tunnel control buttons
-    document.addEventListener('click', function(e) {
-      if (e.target && e.target.id === 'startTunnelBtn') {
-        fetch('/api/cloudflared/service', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'start' })
-        }).then(() => refreshTunnelStatus());
-      }
-      if (e.target && e.target.id === 'stopTunnelBtn') {
-        fetch('/api/cloudflared/service', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'stop' })
-        }).then(() => refreshTunnelStatus());
-      }
-      // Disabled: never allow create from status button
-      // if (e.target && e.target.id === 'createTunnelBtn') {
-      //   fetch('/api/cloudflared/service', {
-      //     method: 'POST',
-      //     headers: { 'Content-Type': 'application/json' },
-      //     body: JSON.stringify({ action: 'create' })
-      //   }).then(() => refreshTunnelStatus());
-      // }
-      if (e.target && e.target.id === 'copyTunnelUrlBtn') {
-        var url = document.getElementById('tunnelUrlLink').href;
-        navigator.clipboard.writeText(url);
-        document.getElementById('settingsFeedback').innerHTML = '<div class="alert alert-info">URL copied!</div>';
-        setTimeout(() => { document.getElementById('settingsFeedback').innerHTML = ''; }, 1500);
-      }
-    });
-
-    // Live status refresh
-    function refreshTunnelStatus() {
-      let pollCount = 0;
-      function pollStatus() {
-        fetch('/api/cloudflared/service')
-          .then(resp => resp.json())
-          .then(data => {
-            let status = data.status;
-            let statusText = '';
-            let actionText = '';
-            let statusClass = '';
-            let actionClass = '';
-            let actionId = '';
-            if (status === 'running') {
-              statusText = 'Running';
-              actionText = 'Stop';
-              statusClass = 'bg-success';
-              actionClass = 'btn-danger';
-              actionId = 'stopTunnelBtn';
-            } else if (status === 'stopped') {
-              statusText = 'Stopped';
-              actionText = 'Restart';
-              statusClass = 'bg-danger';
-              actionClass = 'btn-success';
-              actionId = 'startTunnelBtn';
-            } else {
-              statusText = 'Not Created';
-              actionText = 'Restart';
-              statusClass = 'bg-secondary';
-              actionClass = 'btn-success';
-              actionId = 'startTunnelBtn';
-            }
-            let width = '180px';
-            let html = `
-              <strong>Cloudflare Tunnel Status:</strong>
-              <span class="ms-2 tunnel-status-action" style="display:inline-flex;align-items:center;justify-content:center;width:${width};vertical-align:middle;position:relative;">
-                <span class="tunnel-badge ${statusClass}" style="display:inline-block;width:${width};text-align:center;white-space:nowrap;padding:6px 0;border-radius:0.25rem;color:#fff;transition:background 0.2s;gap:0.5rem;">${statusText}</span>
-                <button class="tunnel-action-btn btn btn-sm ${actionClass}" id="${actionId}" style="display:none;width:${width};text-align:center;white-space:nowrap;padding:6px 0;margin-left:0;">${actionText}</button>
-              </span>
-            `;
-            document.getElementById('tunnelStatusRow').innerHTML = html;
-            let wrapper = document.querySelector('.tunnel-status-action');
-            if (wrapper) {
-              wrapper.addEventListener('mouseenter', function() {
-                wrapper.querySelector('.tunnel-badge').style.display = 'none';
-                wrapper.querySelector('.tunnel-action-btn').style.display = 'inline-block';
-              });
-              wrapper.addEventListener('mouseleave', function() {
-                wrapper.querySelector('.tunnel-badge').style.display = 'inline-block';
-                wrapper.querySelector('.tunnel-action-btn').style.display = 'none';
-              });
-            }
-            let urlHtml = '';
-            if (data.url) {
-              urlHtml = `<div class="alert alert-info mt-2 d-flex align-items-center"><div><strong>Public URL:</strong> <a href="${data.url}" target="_blank" id="tunnelUrlLink">${data.url}</a></div><button class="btn btn-outline-secondary btn-sm ms-2" id="copyTunnelUrlBtn" title="Copy URL"><i class="fas fa-copy"></i></button></div>`;
-              document.getElementById('tunnelUrlRow').innerHTML = urlHtml;
-            } else if (data.status === 'running') {
-              urlHtml = '<div class="alert alert-warning mt-2"><strong>Waiting for public URL...</strong></div>';
-              document.getElementById('tunnelUrlRow').innerHTML = urlHtml;
-              if (pollCount < 30) { // poll up to 30 times (about 30s)
-                pollCount++;
-                setTimeout(pollStatus, 1000);
-              }
-            } else {
-              document.getElementById('tunnelUrlRow').innerHTML = '';
-            }
-          });
-      }
-      pollStatus();
-    }
-
-    // Initial load
-    refreshTunnelStatus();
   });
         </script>
       </div>
