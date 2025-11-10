@@ -47,11 +47,11 @@ This document describes the current architecture of the FreqTrade web interface 
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    Configuration Layer                            │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐     │
-│  │ Configs  │   │Strategies│   │ Pairlists│   │  Docker  │     │
-│  │  (JSON)  │   │   (PY)   │   │  (JSON)  │   │ Compose  │     │
-│  └────┬─────┘   └────┬─────┘   └────┬─────┘   └────┬─────┘     │
+│                    Configuration Layer                           │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐       │
+│  │ Configs  │   │Strategies│   │ Pairlists│   │  Docker  │       │
+│  │  (JSON)  │   │   (PY)   │   │  (JSON)  │   │ Compose  │       │
+│  └────┬─────┘   └────┬─────┘   └────┬─────┘   └────┬─────┘       │
 │       │              │              │              │             │
 │       └──────────────┴──────────────┴──────────────┘             │
 │                           │                                      │
@@ -65,7 +65,7 @@ This document describes the current architecture of the FreqTrade web interface 
                            │ docker-compose up/down
                            ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                      Runtime Layer                                │
+│                      Runtime Layer                               │
 │                  ┌──────────────────┐                            │
 │                  │ Containers View  │ ◄─── Monitor running bots  │
 │                  │  (Runtime Mgmt)  │                            │
@@ -2054,6 +2054,127 @@ web_interface/
         └── pages/
             └── pairlists.js ✅
 ```
+
+---
+
+## 15. Roadmap & Action Log
+
+**Purpose:** Track all refactoring actions with complete traceability. Each entry documents intent, scope, verification, and rollback strategy.
+
+**Rules:**
+- New entries are added **at the top** of the action list (reverse chronological)
+- Never proceed to the next action until the previous entry exists here
+- Update status in-place: `Planned` → `In-Progress` → `Done` or `Reverted`
+- Include commit hash once known for complete traceability
+
+---
+
+### [A-0.10] Initialize Roadmap & Guardrails (Status: In-Progress)
+
+**Date (UTC):** 2025-11-10 00:00  
+**Owner:** Copilot  
+**Scope:** `ARCHITECTURE.md`, `.gitignore`
+
+**Rationale:** Establish persistent tracking system for all refactoring actions to ensure safe, reversible changes and maintain context across sessions. This guardrail system prevents drive-by refactors and enforces verification at each step.
+
+**Steps:**
+1. Add `## 15. Roadmap & Action Log` section to ARCHITECTURE.md at end of document
+2. Add Guardrails checklist (pre-flight checks for every action)
+3. Add Approval Gate checklist (verification requirements before stage completion)
+4. Add this first action entry as template example
+5. Add .gitignore file for Python/Flask project (bonus: repository hygiene)
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Check section renders correctly
+  cat web_interface\ARCHITECTURE.md | Select-String -Pattern "## 15. Roadmap"
+  
+  # Verify .gitignore exists
+  Test-Path web_interface\.gitignore
+  
+  # Check document structure is intact
+  cat web_interface\ARCHITECTURE.md | Select-String -Pattern "^## " | Select-Object -First 15
+  ```
+- **Criteria:**
+  - Section appears at end of document (section 15)
+  - All other section numbers unchanged
+  - Template format is clear and copy-pasteable
+  - Guardrails checklist is actionable
+  - .gitignore exists and covers Python/Flask patterns
+  - No markdown syntax errors
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# Or restore from backup:
+git checkout HEAD~1 -- web_interface\ARCHITECTURE.md web_interface\.gitignore
+```
+
+**Commit:** `<TBD - will update after commit>`
+
+**Notes:** 
+- This is a documentation-only change with zero code impact
+- .gitignore addition is safe hygiene improvement
+- Future actions will follow this exact template format
+- Status will be updated to `Done` after commit with hash
+- Placed at end to avoid renumbering all existing sections
+
+---
+
+### Guardrails (Apply to Every Action)
+
+Before making **any** edits:
+- [ ] Action entry exists in this log with status `Planned`
+- [ ] Scope lists all files that will be touched
+- [ ] Verification commands are specific and runnable
+- [ ] Rollback strategy is documented
+- [ ] Approval received (human replies "Proceed [ID]")
+
+During edits:
+- [ ] Update status to `In-Progress`
+- [ ] Make only the changes listed in Steps
+- [ ] Stay within declared Scope (no drive-by refactors)
+- [ ] Keep diff size reasonable (<120 lines preferred)
+
+After edits:
+- [ ] Run all Verification commands
+- [ ] Update entry with commit hash
+- [ ] Update status to `Done`
+- [ ] Document any unexpected findings in Notes
+- [ ] If issues found: set status to `Reverted` and document why
+
+---
+
+### Approval Gates (Stage Completion Checklist)
+
+**Stage A Approval Gate:**
+- [ ] All existing functionality works (file CRUD, Docker ops, navigation)
+- [ ] No console errors in browser developer tools
+- [ ] No Python exceptions in server logs
+- [ ] All download/upload operations work
+- [ ] Category filters display correctly on all resource pages
+- [ ] Docker operations work (start/stop/restart services)
+- [ ] Manual smoke test completed for all 5 tabs
+
+**Stage B Approval Gate:**
+- [ ] All Stage A checks pass
+- [ ] Feature flag toggles between old and new implementations
+- [ ] Both code paths produce identical results (tested)
+- [ ] Provider unit tests have >80% coverage
+- [ ] Category migration script tested with dry-run
+- [ ] Performance benchmarks show no degradation
+- [ ] Rollback tested (feature flag = false works)
+
+**Stage C Approval Gate:**
+- [ ] All Stage A & B checks pass
+- [ ] JavaScript modules load without errors
+- [ ] No inline `<script>` blocks >100 lines remain
+- [ ] Category filters work on all resource pages
+- [ ] Mobile responsive design verified (<768px width)
+- [ ] Browser compatibility tested (Chrome, Firefox, Edge)
+- [ ] All CRUD operations work through new module architecture
+- [ ] Template components render correctly
 
 ---
 
