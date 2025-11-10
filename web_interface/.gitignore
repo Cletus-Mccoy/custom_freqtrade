@@ -44,11 +44,6 @@ config/secrets.json
 **/exchange_secrets.json
 user_data/ftapikeys/*/exchange_secrets.json
 
-# Cloudflare tunnel credentials
-cloudflared/config.yml
-cloudflared/*.json
-cloudflared/*.pem
-
 # ============================================================================
 # User Data (Optional - Uncomment if needed)
 # ============================================================================
@@ -180,9 +175,6 @@ pip-delete-this-directory.txt
 # Flask/Gunicorn logs
 logs/
 *.log.*
-
-# Cloudflared logs
-cloudflared.log
 
 # ============================================================================
 # Backup Files

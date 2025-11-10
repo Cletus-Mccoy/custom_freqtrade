@@ -26,14 +26,5 @@
             "binance_all_futures.json": "example"
         }
     },
-    "global_settings": {
-        "cloudflare": {
-            "enabled": true,
-            "autostart": true,
-            "subdomain": "freqtrade.kadanskonsult.be",
-            "token_set": true,
-            "tunnel_name": "freqtrade",
-            "tunnel_url": null
-        }
-    }
+    "global_settings": {}
 }
