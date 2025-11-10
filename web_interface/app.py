@@ -15,6 +15,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, f
 import docker
 from utils.category_manager import CategoryManager
 from utils.file_operations import send_file_download
+from utils.logger import get_logger
 from werkzeug.utils import secure_filename
 from flask import abort
 
@@ -36,6 +37,9 @@ category_manager = CategoryManager(BASE_PATH / "web_interface" / "config" / "use
 # --- Flask App Initialization ---
 app = Flask(__name__)
 app.secret_key = 'freqtrade_web_interface_2025'
+
+# --- Logger Setup ---
+logger = get_logger(__name__)
 
 # Register custom Jinja2 filters
 def merge_filter(dict1, dict2):
@@ -178,12 +182,14 @@ def options():
     
     return jsonify({"global_settings": {}})
 
-# Debug print after app is defined
-print("\n>>> THIS IS THE app.py BEING RUN <<<\n")
+# Log startup information
+logger.info("="*50)
+logger.info("FreqTrade Web Interface Starting")
+logger.info("="*50)
 with app.app_context():
-    print("Registered routes:")
+    logger.info("Registered routes:")
     for rule in app.url_map.iter_rules():
-        print(rule)
+        logger.debug(f"  {rule}")
 
 
 # Docker client initialization
@@ -239,7 +245,7 @@ def init_docker_client():
     
     for i, conn_config in enumerate(connection_methods, 1):
         try:
-            print(f"Attempting Docker connection method {i}: {conn_config['name']}")
+            logger.info(f"Attempting Docker connection method {i}: {conn_config['name']}")
             client = conn_config['method']()
             
             # Test the connection with timeout
@@ -249,22 +255,22 @@ def init_docker_client():
             info = client.info()
             
             docker_client = client
-            print(f"✅ Docker client connected successfully using {conn_config['name']}")
-            print(f"   Docker version: {info.get('ServerVersion', 'Unknown')}")
-            print("   All Docker features are available!")
+            logger.info(f"Docker client connected successfully using {conn_config['name']}")
+            logger.info(f"Docker version: {info.get('ServerVersion', 'Unknown')}")
+            logger.info("All Docker features are available")
             return True
             
         except Exception as e:
-            print(f"❌ {conn_config['name']} failed: {str(e)}")
+            logger.warning(f"{conn_config['name']} failed: {str(e)}")
             continue
     
-    print("\n⚠️  All Docker connection methods failed.")
-    print("   Please ensure Docker Desktop is running and accessible.")
-    print("   You can still use the web interface for configuration management.")
-    print("   To fix Docker connection:")
-    print("   1. Start Docker Desktop")
-    print("   2. Ensure Docker is running (check system tray)")
-    print("   3. Restart this application")
+    logger.error("All Docker connection methods failed")
+    logger.error("Please ensure Docker Desktop is running and accessible")
+    logger.warning("You can still use the web interface for configuration management")
+    logger.info("To fix Docker connection:")
+    logger.info("  1. Start Docker Desktop")
+    logger.info("  2. Ensure Docker is running (check system tray)")
+    logger.info("  3. Restart this application")
     return False
 
 
@@ -320,7 +326,7 @@ class FreqTradeManager:
                 yaml.dump(compose_data, f, default_flow_style=False, sort_keys=False)
             return True
         except Exception as e:
-            print(f"Error saving docker-compose.yml: {e}")
+            logger.error(f"Error saving docker-compose.yml: {e}")
             return False
 
     def add_general_docker_service(self, service_name, service_config):
@@ -336,7 +342,7 @@ class FreqTradeManager:
             if 'services' not in compose_data:
                 compose_data['services'] = {}
             if service_name in compose_data['services']:
-                print(f"Service {service_name} already exists")
+                logger.info(f"Service {service_name} already exists")
                 return False
             compose_data['services'][service_name] = service_config
             # Ensure network exists
@@ -346,7 +352,7 @@ class FreqTradeManager:
                 compose_data['networks']['freqtrade_network'] = {'driver': 'bridge'}
             return self.save_docker_compose(compose_data)
         except Exception as e:
-            print(f"Error adding general docker service: {e}")
+            logger.error(f"Error adding general docker service: {e}")
             return False
     def __init__(self):
         self.base_path = BASE_PATH
@@ -380,7 +386,7 @@ class FreqTradeManager:
                         'color': color
                     })
                 except Exception as e:
-                    print(f"Error reading pairlist {file}: {e}")
+                    logger.error(f"Error reading pairlist {file}: {e}")
         return sorted(pairlists, key=lambda x: x['name'])
     
     def _categorize_pairlist(self, filename):
@@ -409,7 +415,7 @@ class FreqTradeManager:
             with open(pairlist_path, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Error getting pairlist content {filename}: {e}")
+            logger.error(f"Error getting pairlist content {filename}: {e}")
             return None
 
     def update_pairlist_file(self, filename, data):
@@ -432,7 +438,7 @@ class FreqTradeManager:
             
             return True
         except Exception as e:
-            print(f"Error updating pairlist file {filename}: {e}")
+            logger.error(f"Error updating pairlist file {filename}: {e}")
             return False
 
     def delete_pairlist_file(self, filename):
@@ -449,7 +455,7 @@ class FreqTradeManager:
             
             return True
         except Exception as e:
-            print(f"Error deleting pairlist file {filename}: {e}")
+            logger.error(f"Error deleting pairlist file {filename}: {e}")
             return False
 
     def clone_pairlist_file(self, filename, new_name):
@@ -480,7 +486,7 @@ class FreqTradeManager:
             
             return True
         except Exception as e:
-            print(f"Error cloning pairlist file {filename}: {e}")
+            logger.error(f"Error cloning pairlist file {filename}: {e}")
             return False
 
     def _update_pairlist_category(self, filename, category):
@@ -513,7 +519,7 @@ class FreqTradeManager:
             
             return True
         except Exception as e:
-            print(f"Error updating pairlist category: {e}")
+            logger.error(f"Error updating pairlist category: {e}")
             return False
     
     def get_available_strategies(self):
@@ -572,7 +578,7 @@ class FreqTradeManager:
                         'category': category_manager.get_file_category('config', file.name)
                     })
                 except Exception as e:
-                    print(f"Error reading config {file}: {e}")
+                    logger.error(f"Error reading config {file}: {e}")
         
         # Check user_data directory for additional config files
         for file in self.user_data_path.glob("config*.json"):
@@ -595,7 +601,7 @@ class FreqTradeManager:
                         'category': category_manager.get_file_category('config', file.name)
                     })
                 except Exception as e:
-                    print(f"Error reading config {file}: {e}")
+                    logger.error(f"Error reading config {file}: {e}")
         
         return sorted(configs, key=lambda x: x['name'])
     
@@ -617,7 +623,7 @@ class FreqTradeManager:
                             'ports': container.ports
                         })
             except Exception as e:
-                print(f"Error getting containers: {e}")
+                logger.error(f"Error getting containers: {e}")
         return containers
     
     def find_config_file(self, filename):
@@ -637,35 +643,35 @@ class FreqTradeManager:
     def resolve_docker_path_to_local(self, docker_path, service_config):
         """Resolve Docker container path to local filesystem path using volume mappings"""
         try:
-            print(f"DEBUG resolve_docker_path_to_local: docker_path={docker_path}")
-            print(f"DEBUG resolve_docker_path_to_local: service_config has volumes: {'volumes' in service_config}")
+            logger.debug(f"resolve_docker_path_to_local: docker_path={docker_path}")
+            logger.debug(f"resolve_docker_path_to_local: service_config has volumes: {'volumes' in service_config}")
             
             if not docker_path or 'volumes' not in service_config:
-                print(f"DEBUG resolve_docker_path_to_local: Early return - docker_path={bool(docker_path)}, has_volumes={'volumes' in service_config}")
+                logger.debug(f"resolve_docker_path_to_local: Early return - docker_path={bool(docker_path)}, has_volumes={'volumes' in service_config}")
                 return None
             
             volumes = service_config['volumes']
-            print(f"DEBUG resolve_docker_path_to_local: volumes={volumes}")
+            logger.debug(f"resolve_docker_path_to_local: volumes={volumes}")
             if not isinstance(volumes, list):
                 return None
             
             for volume in volumes:
-                print(f"DEBUG resolve_docker_path_to_local: checking volume={volume}")
+                logger.debug(f"resolve_docker_path_to_local: checking volume={volume}")
                 if isinstance(volume, str) and ':' in volume:
                     # Handle volume format: "local_path:container_path" or "local_path:container_path:options"
                     parts = volume.split(':')
-                    print(f"DEBUG resolve_docker_path_to_local: volume parts={parts}")
+                    logger.debug(f"resolve_docker_path_to_local: volume parts={parts}")
                     if len(parts) >= 2:
                         local_path = parts[0]
                         container_path = parts[1]
-                        print(f"DEBUG resolve_docker_path_to_local: local_path={local_path}, container_path={container_path}")
+                        logger.debug(f"resolve_docker_path_to_local: local_path={local_path}, container_path={container_path}")
                         
                         # Check if docker_path starts with the container path
                         if docker_path.startswith(container_path):
-                            print(f"DEBUG resolve_docker_path_to_local: MATCH found for {docker_path} with {container_path}")
+                            logger.debug(f"resolve_docker_path_to_local: MATCH found for {docker_path} with {container_path}")
                             # Replace container path with local path
                             relative_path = docker_path[len(container_path):].lstrip('/')
-                            print(f"DEBUG resolve_docker_path_to_local: relative_path={relative_path}")
+                            logger.debug(f"resolve_docker_path_to_local: relative_path={relative_path}")
                             
                             # Convert to absolute local path
                             if local_path.startswith('./'):
@@ -678,20 +684,20 @@ class FreqTradeManager:
                                 # Relative to base path
                                 local_base = self.base_path / local_path
                             
-                            print(f"DEBUG resolve_docker_path_to_local: local_base={local_base}")
+                            logger.debug(f"resolve_docker_path_to_local: local_base={local_base}")
                             
                             if relative_path:
                                 resolved_path = local_base / relative_path
                             else:
                                 resolved_path = local_base
                             
-                            print(f"DEBUG resolve_docker_path_to_local: resolved_path={resolved_path}, exists={resolved_path.exists()}")
+                            logger.debug(f"resolve_docker_path_to_local: resolved_path={resolved_path}, exists={resolved_path.exists()}")
                             return resolved_path
             
             return None
             
         except Exception as e:
-            print(f"Error resolving Docker path {docker_path}: {e}")
+            logger.error(f"Error resolving Docker path {docker_path}: {e}")
             return None
 
     def find_config_file_in_service(self, config_file, service_config):
@@ -713,7 +719,7 @@ class FreqTradeManager:
             return self.find_config_file(config_filename)
             
         except Exception as e:
-            print(f"Error finding config file {config_file}: {e}")
+            logger.error(f"Error finding config file {config_file}: {e}")
             return None
 
     def find_strategy_file_in_service(self, strategy_name, service_config):
@@ -739,13 +745,13 @@ class FreqTradeManager:
             return None
             
         except Exception as e:
-            print(f"Error finding strategy file {strategy_name}: {e}")
+            logger.error(f"Error finding strategy file {strategy_name}: {e}")
             return None
 
     def create_config_from_template(self, template_config, strategy, pairlist, container_name):
         """Create a new config file from template"""
         try:
-            print(f"Creating config from template: {template_config}")
+            logger.info(f"Creating config from template: {template_config}")
             
             # Validate inputs
             if not all([template_config, strategy, pairlist, container_name]):
@@ -756,7 +762,7 @@ class FreqTradeManager:
             if not template_path:
                 raise FileNotFoundError(f"Template config file '{template_config}' not found in configs or user_data directories")
             
-            print(f"Found template at: {template_path}")
+            logger.info(f"Found template at: {template_path}")
             
             # Load template
             with open(template_path, 'r', encoding='utf-8') as f:
@@ -774,7 +780,7 @@ class FreqTradeManager:
             if 'pair_whitelist' not in pairlist_data:
                 raise ValueError(f"Pairlist file '{pairlist}' missing pair_whitelist")
             
-            print(f"Loaded pairlist with {len(pairlist_data['pair_whitelist'])} pairs")
+            logger.info(f"Loaded pairlist with {len(pairlist_data['pair_whitelist'])} pairs")
             
             # Update config
             config_data['strategy'] = strategy
@@ -792,7 +798,7 @@ class FreqTradeManager:
                 if 'feature_parameters' not in config_data['freqai']:
                     config_data['freqai']['feature_parameters'] = {}
                 config_data['freqai']['feature_parameters']['include_corr_pairlist'] = pairlist_data['pair_whitelist']
-                print("Updated FreqAI correlation pairs")
+                logger.info("Updated FreqAI correlation pairs")
             
             # Update bot name
             config_data['bot_name'] = container_name
@@ -812,16 +818,16 @@ class FreqTradeManager:
             
             # Save new config
             new_config_path = self.configs_path / f"config_{container_name}.json"
-            print(f"Saving config to: {new_config_path}")
+            logger.info(f"Saving config to: {new_config_path}")
             
             with open(new_config_path, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=4, ensure_ascii=False)
             
-            print(f"Config created successfully: {new_config_path}")
+            logger.info(f"Config created successfully: {new_config_path}")
             return str(new_config_path)
             
         except Exception as e:
-            print(f"Error creating config from template: {e}")
+            logger.error(f"Error creating config from template: {e}")
             import traceback
             traceback.print_exc()
             raise Exception(f"Error creating config: {e}")
@@ -829,7 +835,7 @@ class FreqTradeManager:
     def create_custom_config(self, custom_config, strategy, pairlist, container_name):
         """Create a new config file from custom settings"""
         try:
-            print(f"Creating custom config for container: {container_name}")
+            logger.info(f"Creating custom config for container: {container_name}")
             
             # Validate inputs
             if not all([custom_config, strategy, pairlist, container_name]):
@@ -847,7 +853,7 @@ class FreqTradeManager:
             if 'pair_whitelist' not in pairlist_data:
                 raise ValueError(f"Pairlist file '{pairlist}' missing pair_whitelist")
             
-            print(f"Loaded pairlist with {len(pairlist_data['pair_whitelist'])} pairs")
+            logger.info(f"Loaded pairlist with {len(pairlist_data['pair_whitelist'])} pairs")
             
             # Build config structure with validation
             config_data = {
@@ -1002,20 +1008,20 @@ class FreqTradeManager:
                     config_data['freqai']['model_training_parameters']['task_type'] = 'CPU'
                     config_data['freqai']['model_training_parameters']['thread_count'] = -1
                 
-                print(f"Added FreqAI configuration with model: {model_type}")
+                logger.info(f"Added FreqAI configuration with model: {model_type}")
             
             # Save new config
             new_config_path = self.configs_path / f"config_{container_name}.json"
-            print(f"Saving custom config to: {new_config_path}")
+            logger.info(f"Saving custom config to: {new_config_path}")
             
             with open(new_config_path, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=4, ensure_ascii=False)
             
-            print(f"Custom config created successfully: {new_config_path}")
+            logger.info(f"Custom config created successfully: {new_config_path}")
             return str(new_config_path)
             
         except Exception as e:
-            print(f"Error creating custom config: {e}")
+            logger.error(f"Error creating custom config: {e}")
             import traceback
             traceback.print_exc()
             raise Exception(f"Error creating custom config: {e}")
@@ -1028,7 +1034,7 @@ class FreqTradeManager:
                     return yaml.safe_load(f)
             return None
         except Exception as e:
-            print(f"Error loading docker-compose.yml: {e}")
+            logger.error(f"Error loading docker-compose.yml: {e}")
             return None
     
     
@@ -1165,7 +1171,7 @@ class FreqTradeManager:
                         if 'api_server' in config_data:
                             config_api_port = config_data['api_server'].get('listen_port', 8080)
                     except Exception as e:
-                        print(f"Error reading config {config_file}: {e}")
+                        logger.error(f"Error reading config {config_file}: {e}")
             
             # Determine overall consistency
             port_match = container_port == config_api_port
@@ -1198,7 +1204,7 @@ class FreqTradeManager:
             return result
             
         except Exception as e:
-            print(f"ERROR: Exception validating port consistency for {service_name}: {e}")
+            logger.error(f" Exception validating port consistency for {service_name}: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -1245,7 +1251,7 @@ class FreqTradeManager:
                                     except (ValueError, IndexError):
                                         continue
         except Exception as e:
-            print(f"Error checking port conflicts: {e}")
+            logger.error(f"Error checking port conflicts: {e}")
         
         return conflicts
     
@@ -1535,7 +1541,7 @@ class FreqTradeManager:
                     'message': 'No config file specified'
                 }
             
-            print(f"DEBUG {service_name}: validate_config_file called with config_file: {config_file}")
+            logger.debug(f"{service_name}: validate_config_file called with config_file: {config_file}")
             
             # Check for config consistency between command and environment
             consistency_check = self.check_config_consistency(service_name, service_config)
@@ -1546,14 +1552,14 @@ class FreqTradeManager:
             
             # Find config file using Docker volume mappings with full Docker path
             config_path = self.find_config_file_in_service(config_file, service_config)
-            print(f"DEBUG {service_name}: find_config_file_in_service returned: {config_path}")
+            logger.debug(f"{service_name}: find_config_file_in_service returned: {config_path}")
             
             if not config_path:
                 # Also try with just the filename as fallback
                 if '/' in config_file:
                     config_filename = config_file.split('/')[-1]
                     config_path = self.find_config_file_in_service(config_filename, service_config)
-                    print(f"DEBUG {service_name}: Fallback with filename {config_filename}: {config_path}")
+                    logger.debug(f"{service_name}: Fallback with filename {config_filename}: {config_path}")
             
             if not config_path:
                 error_msg = f'Config file "{config_file}" not found'
@@ -1732,13 +1738,13 @@ class FreqTradeManager:
             with open(self.docker_compose_path, 'r') as f:
                 return f.read()
         except Exception as e:
-            print(f"Error reading docker-compose.yml: {e}")
+            logger.error(f"Error reading docker-compose.yml: {e}")
             return "# Error reading docker-compose.yml"
     
     def add_docker_service(self, service_name, strategy, config_file, pairlist_file, external_api_port=8081):
         """Add a new service to docker-compose.yml"""
         try:
-            print(f"Adding Docker service: {service_name}")
+            logger.info(f"Adding Docker service: {service_name}")
             compose_data = self.load_docker_compose()
             if not compose_data:
                 # Create basic structure if file doesn't exist
@@ -1754,7 +1760,7 @@ class FreqTradeManager:
                 
             # Check if service already exists
             if service_name in compose_data['services']:
-                print(f"Service {service_name} already exists")
+                logger.info(f"Service {service_name} already exists")
                 return False
             
             # Create service configuration
@@ -1798,7 +1804,7 @@ class FreqTradeManager:
             return success
             
         except Exception as e:
-            print(f"Error adding Docker service: {e}")
+            logger.error(f"Error adding Docker service: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -1856,7 +1862,7 @@ class FreqTradeManager:
             print(f"Timeout starting service: {service_name}")
             return False
         except Exception as e:
-            print(f"Error starting Docker service: {e}")
+            logger.error(f"Error starting Docker service: {e}")
             return False
     
     def stop_docker_service(self, service_name):
@@ -1882,7 +1888,7 @@ class FreqTradeManager:
             except subprocess.TimeoutExpired:
                 print(f"Timeout stopping service {service_name} with 'docker compose'")
             except Exception as e:
-                print(f"Error with 'docker compose' stop: {e}")
+                logger.error(f"Error with 'docker compose' stop: {e}")
             
             # Fallback to legacy syntax
             try:
@@ -1902,7 +1908,7 @@ class FreqTradeManager:
                 print(f"Timeout stopping service {service_name} with 'docker-compose'")
                 
         except Exception as e:
-            print(f"Error stopping Docker service: {e}")
+            logger.error(f"Error stopping Docker service: {e}")
             return False
     
     def restart_docker_service(self, service_name):
@@ -1928,7 +1934,7 @@ class FreqTradeManager:
             except subprocess.TimeoutExpired:
                 print(f"Timeout restarting service {service_name} with 'docker compose'")
             except Exception as e:
-                print(f"Error with 'docker compose' restart: {e}")
+                logger.error(f"Error with 'docker compose' restart: {e}")
             
             # Fallback to legacy syntax
             try:
@@ -1948,7 +1954,7 @@ class FreqTradeManager:
                 print(f"Timeout restarting service {service_name} with 'docker-compose'")
                 
         except Exception as e:
-            print(f"Error restarting Docker service: {e}")
+            logger.error(f"Error restarting Docker service: {e}")
             return False
     
     def start_all_docker_services(self):
@@ -1974,7 +1980,7 @@ class FreqTradeManager:
             except subprocess.TimeoutExpired:
                 print("Timeout starting all services with 'docker compose'")
             except Exception as e:
-                print(f"Error with 'docker compose' up: {e}")
+                logger.error(f"Error with 'docker compose' up: {e}")
             
             # Fallback to legacy syntax
             try:
@@ -1994,7 +2000,7 @@ class FreqTradeManager:
                 print("Timeout starting all services with 'docker-compose'")
                 
         except Exception as e:
-            print(f"Error starting all Docker services: {e}")
+            logger.error(f"Error starting all Docker services: {e}")
             return False
     
     def stop_all_docker_services(self):
@@ -2020,7 +2026,7 @@ class FreqTradeManager:
             except subprocess.TimeoutExpired:
                 print("Timeout stopping all services with 'docker compose'")
             except Exception as e:
-                print(f"Error with 'docker compose' down: {e}")
+                logger.error(f"Error with 'docker compose' down: {e}")
             
             # Fallback to legacy syntax
             try:
@@ -2040,7 +2046,7 @@ class FreqTradeManager:
                 print("Timeout stopping all services with 'docker-compose'")
                 
         except Exception as e:
-            print(f"Error stopping all Docker services: {e}")
+            logger.error(f"Error stopping all Docker services: {e}")
             return False
     
     def get_service_status(self, service_name):
@@ -2069,7 +2075,7 @@ class FreqTradeManager:
                     # If not found in compose, try direct container check
                     return self._check_container_directly(service_name)
             except Exception as e:
-                print(f"Error with 'docker compose' ps: {e}")
+                logger.error(f"Error with 'docker compose' ps: {e}")
             
             # Fallback to legacy syntax
             try:
@@ -2095,7 +2101,7 @@ class FreqTradeManager:
                 pass
                 
         except Exception as e:
-            print(f"Error getting service status: {e}")
+            logger.error(f"Error getting service status: {e}")
             
         # Final fallback: check for container directly
         return self._check_container_directly(service_name)
@@ -2155,7 +2161,7 @@ class FreqTradeManager:
             return "not_found"
             
         except Exception as e:
-            print(f"Error checking container directly: {e}")
+            logger.error(f"Error checking container directly: {e}")
             return "unknown"
     
     def validate_docker_compose_yaml(self, yaml_content):
@@ -2395,7 +2401,7 @@ class FreqTradeManager:
             return self.save_docker_compose(compose_data)
             
         except Exception as e:
-            print(f"Error fixing Docker Compose formatting: {e}")
+            logger.error(f"Error fixing Docker Compose formatting: {e}")
             return False
 
 
@@ -2436,7 +2442,7 @@ def pairlists():
                 pairlist['category'] = 'custom'
         return render_template('pairlists.html', pairlists=pairlists, settings=settings)
     except Exception as e:
-        print(f"Error in pairlists route: {str(e)}")
+        logger.error(f"Error in pairlists route: {str(e)}")
         flash('Failed to load pairlists. Please check the server logs.', 'error')
         return render_template('pairlists.html', pairlists=[], settings=load_settings())
 
@@ -2539,7 +2545,7 @@ def get_pairlist_api(filename):
             return jsonify({'error': 'Pairlist not found'}), 404
         return jsonify(pairlist)
     except Exception as e:
-        print(f"Error getting pairlist {filename}: {str(e)}")
+        logger.error(f"Error getting pairlist {filename}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/pairlist/<filename>', methods=['PUT'])
@@ -2569,7 +2575,7 @@ def update_pairlist_api(filename):
         else:
             return jsonify({'error': 'Failed to update pairlist'}), 500
     except Exception as e:
-        print(f"Error updating pairlist {filename}: {str(e)}")
+        logger.error(f"Error updating pairlist {filename}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/pairlist/<filename>', methods=['DELETE'])
@@ -2582,7 +2588,7 @@ def delete_pairlist_api(filename):
         else:
             return jsonify({'error': 'Failed to delete pairlist'}), 500
     except Exception as e:
-        print(f"Error deleting pairlist {filename}: {str(e)}")
+        logger.error(f"Error deleting pairlist {filename}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/pairlist/<filename>/clone', methods=['POST'])
@@ -2599,7 +2605,7 @@ def clone_pairlist_api(filename):
         else:
             return jsonify({'error': 'Failed to clone pairlist'}), 500
     except Exception as e:
-        print(f"Error cloning pairlist {filename}: {str(e)}")
+        logger.error(f"Error cloning pairlist {filename}: {str(e)}")
         return jsonify({'error': str(e)}), 500
         # Ensure directory exists
         pairlist_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3472,9 +3478,9 @@ def validate_strategy_api(service_name):
             
             # Debug: temporarily log the raw command for freqtrade_godstra_hyperopt
             if service_name == 'freqtrade_godstra_hyperopt':
-                print(f"DEBUG {service_name}: Raw command type: {type(command)}")
-                print(f"DEBUG {service_name}: Raw command: {repr(command)}")
-                print(f"DEBUG {service_name}: Command string: {repr(command_str)}")
+                logger.debug(f"{service_name}: Raw command type: {type(command)}")
+                logger.debug(f"{service_name}: Raw command: {repr(command)}")
+                logger.debug(f"{service_name}: Command string: {repr(command_str)}")
             
             # Handle shell commands with -c flag - normalize whitespace and newlines
             if '-c' in command_str and 'freqtrade' in command_str:
@@ -3482,7 +3488,7 @@ def validate_strategy_api(service_name):
                 normalized_command = ' '.join(command_str.split())
                 
                 if service_name == 'freqtrade_godstra_hyperopt':
-                    print(f"DEBUG {service_name}: Normalized: {repr(normalized_command)}")
+                    logger.debug(f"{service_name}: Normalized: {repr(normalized_command)}")
                 
                 # Extract content between quotes for shell commands - handle multi-line
                 import re
@@ -3500,8 +3506,8 @@ def validate_strategy_api(service_name):
                         # Get the captured group (might be group 1 or 2 depending on pattern)
                         shell_content = shell_match.group(2) if shell_match.lastindex and shell_match.lastindex >= 2 else shell_match.group(1)
                         if service_name == 'freqtrade_godstra_hyperopt':
-                            print(f"DEBUG {service_name}: Pattern matched: {pattern}")
-                            print(f"DEBUG {service_name}: Shell content: {repr(shell_content)}")
+                            logger.debug(f"{service_name}: Pattern matched: {pattern}")
+                            logger.debug(f"{service_name}: Shell content: {repr(shell_content)}")
                         break
                 
                 if shell_content:
@@ -3510,7 +3516,7 @@ def validate_strategy_api(service_name):
                     if strategy_match:
                         strategy = strategy_match.group(1)
                         if service_name == 'freqtrade_godstra_hyperopt':
-                            print(f"DEBUG {service_name}: Found strategy: {strategy}")
+                            logger.debug(f"{service_name}: Found strategy: {strategy}")
                         
             # Handle simple command format
             if isinstance(command, list):
@@ -3567,17 +3573,17 @@ def validate_config_api(service_name):
             elif isinstance(command, str):
                 command_str = command
             
-            print(f"DEBUG {service_name}: Config command_str: {repr(command_str)}")
+            logger.debug(f"{service_name}: Config command_str: {repr(command_str)}")
             
             # Handle shell commands with -c flag
             if '-c' in command_str and 'freqtrade' in command_str:
                 # Simple approach: just search for --config in the entire command string
                 import re
                 config_match = re.search(r'--config\s+(\S+)', command_str)
-                print(f"DEBUG {service_name}: Config match: {config_match}")
+                logger.debug(f"{service_name}: Config match: {config_match}")
                 if config_match:
                     config_file = config_match.group(1)  # Keep full Docker path
-                    print(f"DEBUG {service_name}: Config file extracted: {config_file}")
+                    logger.debug(f"{service_name}: Config file extracted: {config_file}")
                         
             # Handle simple command format
             if '--config' in command_str:

@@ -2066,6 +2066,65 @@ web_interface/
 
 ---
 
+### [A-3.10] Create Logging Infrastructure (Status: In-Progress)
+
+**Date (UTC):** 2025-11-10 01:30  
+**Owner:** Copilot  
+**Scope:** `utils/logger.py` (new file, ~60 lines), `app.py` (~50 print statements)
+
+**Rationale:** Replace ~50 print statements throughout app.py with structured logging. Current print statements mix INFO, DEBUG, WARNING, and ERROR messages without distinction, making production debugging difficult. Creating a centralized logger utility enables proper log levels, formatting, and output control. Also enables future enhancements like file logging, log rotation, and external log aggregation.
+
+**Steps:**
+1. Create `utils/logger.py` with:
+   ```python
+   def get_logger(name: str, level: str = 'INFO') -> logging.Logger:
+       """Get configured logger instance with consistent formatting"""
+   ```
+2. Import in app.py: `from utils.logger import get_logger`
+3. Create logger instance: `logger = get_logger(__name__)`
+4. Replace print statements by category:
+   - Startup messages (lines 182-186) → `logger.info()`
+   - Docker connection (lines 242-267) → `logger.info()` / `logger.warning()` / `logger.error()`
+   - Error messages (all `print(f"Error ...")`) → `logger.error()`
+   - DEBUG messages (lines 640-688) → `logger.debug()`
+   - Info messages (template loading, config creation) → `logger.info()`
+
+**Verification:**
+- **Commands:**
+  ```powershell
+  # Test logger import
+  python -c "from web_interface.utils.logger import get_logger; print('Logger imported OK')"
+  
+  # Run app and check log output shows proper levels
+  # Set DEBUG level to verify debug messages work
+  # Verify no print statements remain (except in routes that return values)
+  ```
+- **Criteria:**
+  - ✅ Logger utility imports successfully
+  - ✅ All print statements replaced with appropriate log levels
+  - ✅ Startup messages show with INFO level
+  - ✅ Error messages show with ERROR level  
+  - ✅ DEBUG messages only show when DEBUG level set
+  - ✅ Log format includes timestamp, level, and module name
+  - ✅ No functional changes to application behavior
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# logger.py remains, app.py reverts to print statements
+```
+
+**Commit:** `<TBD - will update after commit>`
+
+**Notes:** 
+- Future: Add file logging with rotation for production use
+- Future: Integrate with external log aggregation (e.g., ELK, Datadog)
+- Log format: `%(asctime)s - %(name)s - %(levelname)s - %(message)s`
+- Default level INFO, can be changed via environment variable
+- Next: Actions A-4.10 through A-5.10 complete Stage A cleanup
+
+---
+
 ### [A-2.10] Create File Operation Utilities (Status: Done)
 
 **Date (UTC):** 2025-11-10 01:00  
