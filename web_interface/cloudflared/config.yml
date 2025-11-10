@@ -1,5 +1,0 @@
-ingress:
-- hostname: freqtrade.kadanskonsult.be
-  service: http://host.docker.internal:5000
-- service: http_status:404
-tunnel: freqtrade-kadanskonsult-be
