@@ -83,7 +83,7 @@ This document describes the current architecture of the FreqTrade web interface 
 **Dashboard Page Responsibilities:**
 - View running container status (via `/api/docker/containers`)
 - Display container statistics (running/stopped counts)
-- Separate FreqTrade containers from management containers (cloudflared, nginx, etc.)
+- Separate FreqTrade containers from management containers (nginx, traefik, etc.)
 - Access container logs via modal (using `/api/container/logs/<name>`)
 - Perform runtime actions (start/stop/restart/remove via `/api/container/<action>/<name>`)
 - Auto-refresh container status every 5 seconds
@@ -162,9 +162,7 @@ def get_available_X():
     "categories": [...],  // NOT YET IMPLEMENTED
     "file_categories": {...}  // NOT YET IMPLEMENTED
   },
-  "global_settings": {
-    "cloudflare": {...}
-  }
+  "global_settings": {}
 }
 ```
 
@@ -1836,7 +1834,6 @@ curl http://localhost:5000/configs -I
 - [ ] No Python exceptions in server logs
 - [ ] Mobile view responsive (test on <768px width)
 - [ ] Settings modal works
-- [ ] Cloudflare tunnel settings (if enabled)
 
 ### 10.2 Regression Test Scenarios
 
