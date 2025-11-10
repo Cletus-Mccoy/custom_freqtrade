@@ -2066,11 +2066,12 @@ web_interface/
 
 ---
 
-### [A-4.20] Fix Pairlist Category Picker UI Inconsistency (Status: In-Progress)
+### [A-4.20] Fix Pairlist Category Picker UI Inconsistency (Status: Done)
 
 **Date (UTC):** 2025-11-10 02:30  
 **Owner:** Copilot  
 **Scope:** `pairlists.html` (4 modals with dropdown category selectors)
+**Commit:** `a279731`
 
 **Rationale:** **CRITICAL UX BUG FOUND BY USER:** Pairlist modals use dropdown `<select>` elements for category selection, while strategies and configs use visual button groups. This creates inconsistent UX where:
 1. Create pairlist modal shows boring dropdown with only "Custom" visible
@@ -2138,7 +2139,7 @@ git revert <commit-hash>
 
 ---
 
-### [A-4.10] Remove Deprecated Category Methods (Status: Paused)
+### [A-4.10] Remove Deprecated Category Methods (Status: Done)
 
 **Date (UTC):** 2025-11-10 02:00  
 **Owner:** Copilot  
@@ -2176,16 +2177,18 @@ git revert <commit-hash>
 # Restores deprecated methods (though they're unused)
 ```
 
-**Commit:** `<TBD - will complete after A-4.20>`
+**Commit:** `a279731` (bundled with A-4.20)
 
 **Notes:** 
-- **PAUSED:** User found critical UX bug (pairlist category picker) - priority shifted to A-4.20
-- Methods successfully removed from app.py (16 lines deleted)
-- Will complete commit after A-4.20 fix to group related category improvements
+- **COMPLETED:** Bundled with A-4.20 after user found critical UX bug
+- Methods successfully removed from app.py (25 lines deleted total):
+  * `_categorize_pairlist()` - 14 lines removed
+  * `_categorize_strategy()` - 11 lines removed
+- Grep search confirmed zero remaining references to these methods
 - This is safe cleanup after successful CategoryManager rollout
 - Methods were kept through [A-1.20] for rollback confidence  
 - Removal reduces cognitive load when reading FreqTradeManager class
-- No functional changes - methods were already bypassed
+- No functional changes - methods were already bypassed by CategoryManager
 
 ---
 
