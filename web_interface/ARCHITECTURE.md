@@ -2066,11 +2066,11 @@ web_interface/
 
 ---
 
-### [A-2.10] Create File Operation Utilities (Status: In-Progress)
+### [A-2.10] Create File Operation Utilities (Status: Done)
 
 **Date (UTC):** 2025-11-10 01:00  
 **Owner:** Copilot  
-**Scope:** `utils/file_operations.py` (new file, ~40 lines), `app.py` (3 download routes)
+**Scope:** `utils/file_operations.py` (new file, 76 lines), `app.py` (3 download routes)
 
 **Rationale:** Three download routes (`download_config`, `download_pairlist`, `download_strategy`) have 95% identical code - only differing in file path and mimetype. Extract common logic into `utils/file_operations.py` with a `send_file_download()` function that handles path validation, error handling, and Flask send_file response. Eliminates ~30 lines of duplication.
 
@@ -2107,11 +2107,11 @@ web_interface/
 
 **Rollback:** 
 ```powershell
-git revert <commit-hash>
+git revert 23ca2a6
 # file_operations.py remains, download routes revert to inline logic
 ```
 
-**Commit:** `<TBD - will update after commit>`
+**Commit:** `23ca2a6`
 
 **Notes:** 
 - Mimetype detection could be enhanced in future (auto-detect from extension)
