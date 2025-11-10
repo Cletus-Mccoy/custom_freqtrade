@@ -157,40 +157,7 @@ def save_settings(settings):
     with open(config_path, 'w') as f:
         json.dump(settings, f, indent=2)
 
-# --- Cloudflare Tunnel Management ---
-_tunnel_process = None
-_tunnel_lock = threading.Lock()
-
-def start_cloudflare_tunnel():
-    global _tunnel_process
-    with _tunnel_lock:
-        if _tunnel_process and _tunnel_process.poll() is None:
-            return True  # Already running
-        # You may need to adjust the path to 'cloudflared' and the arguments
-        try:
-            _tunnel_process = subprocess.Popen([
-                "cloudflared", "tunnel", "--url", "http://localhost:5000"
-            ])
-            return True
-        except Exception as e:
-            print(f"Error starting Cloudflare Tunnel: {e}")
-            return False
-
-def stop_cloudflare_tunnel():
-    global _tunnel_process
-    with _tunnel_lock:
-        if _tunnel_process and _tunnel_process.poll() is None:
-            _tunnel_process.terminate()
-            _tunnel_process = None
-            return True
-        return False
-
-def is_tunnel_running():
-    global _tunnel_process
-    with _tunnel_lock:
-        return _tunnel_process is not None and _tunnel_process.poll() is None
-
-# --- Global Options Menu (Cloudflare Tunnel) ---
+# --- Global Options Menu ---
 @app.route('/options', methods=['GET', 'POST'])
 def options():
     """Global Options Menu (Cloudflare Tunnel) - RESTORED FULL LOGIC"""
