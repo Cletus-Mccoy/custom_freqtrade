@@ -59,14 +59,14 @@
                             "class": "pairlist-action-btn",
                             "icon": "plus",
                             "text": "Create New",
-                            "modal": "createPairlistModal"
+                            "onclick": "showCreatePairlistModal()"
                         },
                         {
                             "style": "info",
                             "class": "pairlist-action-btn",
                             "icon": "upload",
                             "text": "Upload New",
-                            "modal": "uploadPairlistModal"
+                            "onclick": "showUploadPairlistModal()"
                         }
                     ]
                 ) }}
@@ -115,14 +115,7 @@
                                 <td><strong>{{ pairlist.name }}</strong></td>
                                 <td>
                                     {% set cat_name = pairlist.category if pairlist.category else 'custom' %}
-                                    {% set cat_color = '#6c757d' %}
-                                    {% if settings and settings.pairlists and settings.pairlists.categories %}
-                                        {% for cat in settings.pairlists.categories %}
-                                            {% if cat.name == cat_name %}
-                                                {% set cat_color = cat.color %}
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% endif %}
+                                    {% set cat_color = pairlist.color if pairlist.color else '#6c757d' %}
                                     <span class="badge" style="background-color: {{ cat_color }}; color: #fff;">{{ cat_name|title }}</span>
                                 </td>
                                 <td>{{ pairlist.pairs_count }}</td>
@@ -138,14 +131,7 @@
                                         <div class="col-6">
                                             <small class="text-muted d-block">Category</small>
                                             {% set cat_name = pairlist.category if pairlist.category else 'custom' %}
-                                            {% set cat_color = '#6c757d' %}
-                                            {% if settings and settings.pairlists and settings.pairlists.categories %}
-                                                {% for cat in settings.pairlists.categories %}
-                                                    {% if cat.name == cat_name %}
-                                                        {% set cat_color = cat.color %}
-                                                    {% endif %}
-                                                {% endfor %}
-                                            {% endif %}
+                                            {% set cat_color = pairlist.color if pairlist.color else '#6c757d' %}
                                             <span class="badge" style="background-color: {{ cat_color }}; color: #fff;">{{ cat_name|title }}</span>
                                         </div>
                                         <div class="col-6">
@@ -582,54 +568,49 @@ function refreshData() {
     if (activeElement && activeElement.classList.contains('pairlist-action-btn')) {
         activeElement.blur();
     }
-    // Ensure categories are loaded before rendering
-    if (typeof loadPairlistCategories === 'function') {
-        loadPairlistCategories().then(() => {
-            fetch('/api/pairlists')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const tbody = document.getElementById('pairlistsTableBody');
-                        tbody.innerHTML = '';
-                        data.pairlists.forEach(pairlist => {
-                            const tr = document.createElement('tr');
-                            tr.setAttribute('data-category', pairlist.category);
-                            // Use getCategoryColor from app.js (must be loaded globally)
-                            let color = '#6c757d';
-                            if (typeof getCategoryColor === 'function') {
-                                color = getCategoryColor(pairlist.category);
-                            }
-                            tr.innerHTML = `
-                                <td><strong>${pairlist.name}</strong></td>
-                                <td><span class="badge" style="background:${color};color:#fff;">${pairlist.category.charAt(0).toUpperCase() + pairlist.category.slice(1)}</span></td>
-                                <td><span class="badge bg-primary">${pairlist.pairs_count}</span></td>
-                                <td><code>${pairlist.filename}</code></td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <button class="btn btn-outline-primary" onclick="viewEditPairlist('${pairlist.filename}', '${pairlist.category}')" title="View/Edit">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <button class="btn btn-outline-success" onclick="copyPairlist('${pairlist.filename}', '${pairlist.category}')" title="Clone">
-                                            <i class="fas fa-copy"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info" onclick="downloadPairlist('${pairlist.filename}')" title="Download">
-                                            <i class="fas fa-download"></i>
-                                        </button>
-                                        <button class="btn btn-outline-danger" onclick="deletePairlist('${pairlist.filename}')" title="Delete">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-                    } else {
-                        alert('Failed to refresh pairlists: ' + (data.error || 'Unknown error'));
-                    }
-                })
-                .catch(() => alert('Failed to refresh pairlists.'));
-        });
-    }
+    
+    fetch('/api/pairlists')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const tbody = document.getElementById('pairlistsTableBody');
+                tbody.innerHTML = '';
+                data.pairlists.forEach(pairlist => {
+                    const tr = document.createElement('tr');
+                    tr.setAttribute('data-category', pairlist.category);
+                    
+                    // Get category color using the existing helper function
+                    const color = getPairlistCategoryColor(pairlist.category);
+                    
+                    tr.innerHTML = `
+                        <td><strong>${pairlist.name}</strong></td>
+                        <td><span class="badge" style="background-color: ${color}; color: #fff;">${pairlist.category.charAt(0).toUpperCase() + pairlist.category.slice(1)}</span></td>
+                        <td><span class="badge bg-primary">${pairlist.pairs_count}</span></td>
+                        <td><code>${pairlist.filename}</code></td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-primary border-dark" onclick="viewEditPairlist('${pairlist.filename}', '${pairlist.category}')" title="View/Edit">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-success border-dark" onclick="copyPairlist('${pairlist.filename}', '${pairlist.category}')" title="Clone">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button class="btn btn-outline-info border-dark" onclick="downloadPairlist('${pairlist.filename}')" title="Download">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button class="btn btn-outline-danger border-dark" onclick="deletePairlist('${pairlist.filename}')" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                alert('Failed to refresh pairlists: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(() => alert('Failed to refresh pairlists.'));
 }
 
 
@@ -786,6 +767,14 @@ function viewEditPairlist(filename, category = 'custom') {
         });
 }
 
+function showCreatePairlistModal() {
+    new bootstrap.Modal(document.getElementById('createPairlistModal')).show();
+}
+
+function showUploadPairlistModal() {
+    new bootstrap.Modal(document.getElementById('uploadPairlistModal')).show();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Add pair on Enter
     document.getElementById('addPairInput').addEventListener('keydown', function(e) {
@@ -919,6 +908,28 @@ function copyPairlist(filename, category = 'custom') {
             document.getElementById('clonePairlistContent').value = 'Failed to load pairlist for cloning.';
         });
     new bootstrap.Modal(document.getElementById('clonePairlistModal')).show();
+}
+
+function downloadPairlist(filename) {
+    if (!filename) return;
+    fetch(`/api/pairlist/download/${filename}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to download pairlist.');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(() => {
+            alert('Failed to download pairlist.');
+        });
 }
 
 function deletePairlist(filename) {

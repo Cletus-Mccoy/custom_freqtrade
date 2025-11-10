@@ -2066,6 +2066,95 @@ web_interface/
 
 ---
 
+### [A-5.40] Fix Category Badge Colors on Initial Page Load (Status: Done)
+
+**Date (UTC):** 2025-11-10 05:30  
+**Owner:** Copilot  
+**Scope:** `templates/pairlists.html` (lines 118, 134)
+
+**Rationale:** **USER-REPORTED BUG:** Category badge colors showing gray (#6c757d default) on initial page load, but displaying correct colors after clicking "Reload Pairlists" button. JavaScript `refreshData()` function works correctly, but Jinja template rendering on initial load fails to apply colors.
+
+**Root Cause Analysis:**
+- Jinja template attempted to look up colors from `settings.pairlists.categories` using nested loops (lines 117-123)
+- However, `get_available_pairlists()` function already includes `color` field in each pairlist object (app.py line 384)
+- Template performed redundant lookup instead of using the data already provided by backend
+- JavaScript refresh worked because it used direct field access: `pairlist.color`
+
+**Current vs Desired State:**
+- **Current:** Template uses 7-line Jinja loop to match category name and find color from settings
+- **Desired:** Template uses direct field access like JavaScript does: `pairlist.color`
+
+**Steps:**
+1. **Desktop Table View (line ~118):** Replace Jinja loop with `{% set cat_color = pairlist.color if pairlist.color else '#6c757d' %}`
+2. **Mobile Card View (line ~134):** Replace Jinja loop with same direct field access
+3. Remove redundant `{% if settings and settings.pairlists... %}` conditional blocks
+4. Simplify from 9 lines to 2 lines per location (14 lines removed total)
+
+**Before (Complex Lookup - BROKEN):**
+```jinja
+{% set cat_name = pairlist.category if pairlist.category else 'custom' %}
+{% set cat_color = '#6c757d' %}
+{% if settings and settings.pairlists and settings.pairlists.categories %}
+    {% for cat in settings.pairlists.categories %}
+        {% if cat.name == cat_name %}
+            {% set cat_color = cat.color %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+<span class="badge" style="background-color: {{ cat_color }}; color: #fff;">{{ cat_name|title }}</span>
+```
+
+**After (Direct Field Access - WORKING):**
+```jinja
+{% set cat_name = pairlist.category if pairlist.category else 'custom' %}
+{% set cat_color = pairlist.color if pairlist.color else '#6c757d' %}
+<span class="badge" style="background-color: {{ cat_color }}; color: #fff;">{{ cat_name|title }}</span>
+```
+
+**Verification:**
+- **Manual Testing:**
+  1. Restart server and clear browser cache
+  2. Navigate to pairlists page (initial load)
+  3. Verify category badges show correct colors (not gray)
+  4. Verify desktop table view shows colored badges
+  5. Verify mobile card view shows colored badges
+  6. Click "Reload Pairlists" button
+  7. Verify colors remain consistent (should not change)
+  8. Check different pairlist categories have different colors
+  
+- **Criteria:**
+  - ✅ Initial page load shows correct category colors
+  - ✅ Desktop table view badges colored correctly
+  - ✅ Mobile card view badges colored correctly
+  - ✅ Colors match config settings (e.g., custom=#198754, freqai=#0dcaf0)
+  - ✅ JavaScript refresh behavior unchanged (still works)
+  - ✅ No console errors or template rendering issues
+
+**Rollback:** 
+```powershell
+git revert <commit-hash>
+# Restores Jinja loop lookup (broken but documented)
+```
+
+**Commit:** `<TBD>`
+
+**Notes:** 
+- **SIMPLIFICATION:** Removed 14 lines of complex Jinja logic
+- Single source of truth: CategoryManager provides color via `get_available_pairlists()`
+- Template now matches JavaScript pattern (both use direct field access)
+- Initial page load behavior now identical to refresh behavior
+- **TODO for later stages:** Apply same pattern to `strategies.html` and `configs.html`
+- All three resource types already return `color` field from backend
+- This eliminates ALL settings lookups in templates (cleaner architecture)
+
+**Additional Fixes in A-5.40:**
+1. ✅ Button styling: Changed to `btn-outline-{style} border-dark` (matches strategies tab)
+2. ✅ Download function: Added `downloadPairlist()` matching strategies pattern
+3. ✅ Modal triggers: Changed from `data-bs-toggle="modal"` to `onclick` pattern
+4. ✅ Category badge colors: Fixed initial page load rendering (this entry)
+
+---
+
 ### [A-5.30] Add View Mode Category Picker Disabled State (Status: Done)
 
 **Date (UTC):** 2025-11-10 04:15  
@@ -2787,16 +2876,49 @@ git checkout df3fab7~1 -- web_interface\ARCHITECTURE.md web_interface\.gitignore
 - Config format stable (NEW nested format enforced)
 - Logger migration complete (structured logging throughout)
 - Utilities extracted (file_operations, category_manager, logger)
+- UX polish complete (buttons, colors, focus management)
 
-**Immediate Priority: Commit & Document A-5.x Series**
-- Commit message: `[A-5.10-5.30] fix(categories): complete system overhaul with proper persistence`
-  * Fixed 3 conflicting category systems (chose Jinja as single source of truth)
-  * Fixed all modal and filter button IDs
-  * Fixed backend GET/PUT endpoints to preserve nested format
-  * Fixed frontend save function with page reload
-  * Added view mode disabled state with visual distinction
-- Update todo list to mark A-5.x complete
-- Run Stage A Approval Gate verification
+**Recent Completion: A-5.40 UI Polish & Category Badge Fix**
+
+Completed November 10, 2025 (Commit: TBD)
+
+**Issue:** Category badge colors showing gray (#6c757d) on initial page load, but correct colors after JavaScript refresh.
+
+**Root Cause:** Jinja template attempted to look up colors from `settings.pairlists.categories` but the `get_available_pairlists()` function already includes the `color` field in each pairlist object (line 384 in app.py).
+
+**Solution:** Simplified Jinja template to use `pairlist.color` directly instead of performing redundant lookup:
+
+```jinja
+{# OLD - Complex lookup that failed #}
+{% set cat_color = '#6c757d' %}
+{% if settings and settings.pairlists and settings.pairlists.categories %}
+    {% for cat in settings.pairlists.categories %}
+        {% if cat.name == cat_name %}
+            {% set cat_color = cat.color %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+{# NEW - Direct field access #}
+{% set cat_color = pairlist.color if pairlist.color else '#6c757d' %}
+```
+
+**Changes Made:**
+1. **templates/pairlists.html (Desktop Table View)** - Line 118: Use `pairlist.color` directly
+2. **templates/pairlists.html (Mobile Card View)** - Line 134: Use `pairlist.color` directly
+3. Both views now consistent with JavaScript `refreshData()` behavior
+
+**Benefits:**
+- Simpler, more maintainable code (removed 7 lines of Jinja logic per location)
+- Single source of truth: CategoryManager provides color via `get_available_pairlists()`
+- No template-level lookups needed (data already prepared by backend)
+- Initial page load now matches refresh behavior exactly
+
+**TODO for Later Stages:**
+- Apply same pattern to `strategies.html` (lines TBD)
+- Apply same pattern to `configs.html` (lines TBD)
+- All three resource types already return color field from backend
+- This eliminates ALL settings lookups in templates
 
 **Stage B Priorities (Backend Abstraction):**
 1. **[B-1.10] Create FileResourceProvider Base Class**

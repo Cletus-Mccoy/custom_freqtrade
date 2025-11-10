@@ -64,7 +64,7 @@
 {% macro render_action_buttons(actions, mobile=false) %}
 <div class="btn-group {% if mobile %}w-100{% else %}btn-group-sm{% endif %}">
     {% for action in actions %}
-    <button class="btn btn-{% if mobile %}outline-{% endif %}{{ action.style|default('primary') }} {% if not mobile %}border-dark{% endif %} {% if mobile %}flex-fill{% endif %}"
+    <button class="btn btn-outline-{{ action.style|default('primary') }} {% if not mobile %}border-dark{% endif %} {% if mobile %}flex-fill{% endif %}"
             {% if action.onclick %}onclick="{{ action.onclick }}"{% endif %}
             {% if action.title %}title="{{ action.title }}"{% endif %}
             {% if action.id %}id="{{ action.id }}"{% endif %}
