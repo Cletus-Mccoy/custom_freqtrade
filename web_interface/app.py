@@ -270,8 +270,6 @@ def init_docker_client():
 # Try to initialize Docker client
 docker_connected = init_docker_client()
 
-## Removed automatic cloudflared container startup. Now only handled when user enables in options.
-
 def check_docker_status():
     """Check if Docker is available and return status info"""
     global docker_client
@@ -601,14 +599,14 @@ class FreqTradeManager:
         return sorted(configs, key=lambda x: x['name'])
     
     def get_docker_containers(self):
-        """Get FreqTrade and Cloudflare Tunnel Docker containers"""
+        """Get FreqTrade Docker containers"""
         containers = []
         if docker_client:
             try:
                 all_containers = docker_client.containers.list(all=True)
                 for container in all_containers:
                     name_lower = container.name.lower()
-                    if 'freqtrade' in name_lower or 'cloudflared' in name_lower:
+                    if 'freqtrade' in name_lower:
                         containers.append({
                             'name': container.name,
                             'id': container.short_id,
