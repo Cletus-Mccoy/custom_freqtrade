@@ -68,14 +68,14 @@
 			"problemMatcher": []
 		},
 		{
-		   "label": "Run Flask App (web_interface/app.py)",
+		   "label": "Run Flask App (web_interface/run.py)",
 		   "type": "shell",
 		   "command": ".venv/scripts/python.exe",
 		   "args": [
 			   "-m",
 			   "flask",
 			   "--app",
-			   "web_interface/app.py",
+			   "web_interface/run.py",
 			   "run"
 		   ],
 		   "isBackground": false,
