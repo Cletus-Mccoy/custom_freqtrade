@@ -34,6 +34,23 @@ SETTINGS_PATH = USER_DATA_PATH / "settings.json"
 # --- Category Manager ---
 category_manager = CategoryManager(BASE_PATH / "web_interface" / "config" / "user_config.json")
 
+# --- Feature Flags ---
+USE_PROVIDER_ABSTRACTION = os.getenv('USE_PROVIDER_ABSTRACTION', 'false').lower() == 'true'
+
+# --- Resource Providers (New Abstraction Layer) ---
+if USE_PROVIDER_ABSTRACTION:
+    from utils.providers import PairlistProvider, StrategyProvider, ConfigProvider
+    
+    pairlist_provider = PairlistProvider(BASE_PATH, category_manager)
+    strategy_provider = StrategyProvider(BASE_PATH, category_manager)
+    config_provider = ConfigProvider(BASE_PATH, category_manager)
+    
+    logger = get_logger(__name__)
+    logger.info("✓ Provider abstraction enabled - using new provider layer")
+else:
+    logger = get_logger(__name__)
+    logger.info("○ Provider abstraction disabled - using legacy code paths")
+
 # --- Flask App Initialization ---
 app = Flask(__name__)
 app.secret_key = 'freqtrade_web_interface_2025'
@@ -2499,7 +2516,12 @@ from flask import make_response
 def api_get_pairlists():
     """Return all pairlists as JSON for AJAX refresh"""
     try:
-        pairlists = manager.get_available_pairlists()
+        if USE_PROVIDER_ABSTRACTION:
+            # New provider-based implementation
+            pairlists = pairlist_provider.list_files()
+        else:
+            # Legacy implementation
+            pairlists = manager.get_available_pairlists()
         return jsonify({"success": True, "pairlists": pairlists})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -2508,7 +2530,13 @@ def api_get_pairlists():
 def get_pairlist_api(filename):
     """Get a specific pairlist file"""
     try:
-        pairlist = manager.get_pairlist_content(filename)
+        if USE_PROVIDER_ABSTRACTION:
+            # New provider-based implementation
+            pairlist = pairlist_provider.get_file(filename)
+        else:
+            # Legacy implementation
+            pairlist = manager.get_pairlist_content(filename)
+        
         if not pairlist:
             return jsonify({'error': 'Pairlist not found'}), 404
         return jsonify(pairlist)
@@ -2533,10 +2561,18 @@ def update_pairlist_api(filename):
         category = data.get('category', 'custom')
         
         # Update pairlist file
-        result = manager.update_pairlist_file(filename, {
-            'pairs': pairs,
-            'category': category
-        })
+        if USE_PROVIDER_ABSTRACTION:
+            # New provider-based implementation
+            result = pairlist_provider.save_file(filename, {
+                'pairs': pairs,
+                'category': category
+            })
+        else:
+            # Legacy implementation
+            result = manager.update_pairlist_file(filename, {
+                'pairs': pairs,
+                'category': category
+            })
         
         if result:
             return jsonify({'success': True})
@@ -2550,7 +2586,13 @@ def update_pairlist_api(filename):
 def delete_pairlist_api(filename):
     """Delete a pairlist file"""
     try:
-        result = manager.delete_pairlist_file(filename)
+        if USE_PROVIDER_ABSTRACTION:
+            # New provider-based implementation
+            result = pairlist_provider.delete_file(filename)
+        else:
+            # Legacy implementation
+            result = manager.delete_pairlist_file(filename)
+        
         if result:
             return jsonify({'success': True})
         else:
@@ -2566,8 +2608,14 @@ def clone_pairlist_api(filename):
         new_name = request.args.get('new_name')
         if not new_name:
             return jsonify({'error': 'New name not provided'}), 400
-            
-        result = manager.clone_pairlist_file(filename, new_name)
+        
+        if USE_PROVIDER_ABSTRACTION:
+            # New provider-based implementation
+            result = pairlist_provider.clone_file(filename, new_name)
+        else:
+            # Legacy implementation
+            result = manager.clone_pairlist_file(filename, new_name)
+        
         if result:
             return jsonify({'success': True})
         else:
