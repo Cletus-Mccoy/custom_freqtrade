@@ -160,103 +160,29 @@ def save_settings(settings):
 # --- Global Options Menu ---
 @app.route('/options', methods=['GET', 'POST'])
 def options():
-    """Global Options Menu (Cloudflare Tunnel) - RESTORED FULL LOGIC"""
-    import time
-    import docker
-    from flask import request
-    # Use user_config.json for global_settings
+    """Global Options Menu"""
     config_path = BASE_PATH / 'web_interface' / 'config' / 'user_config.json'
+    
+    if request.method == 'POST':
+        data = request.get_json(force=True, silent=True) or {}
+        # Remove cloudflare section if present
+        if 'global_settings' in data and 'cloudflare' in data.get('global_settings', {}):
+            del data['global_settings']['cloudflare']
+        
+        with open(config_path, 'w') as f:
+            json.dump(data, f, indent=2)
+        return jsonify({"success": True, "settings": data})
+    
+    # GET: return current settings without cloudflare
     if config_path.exists():
         with open(config_path, 'r') as f:
             config = json.load(f)
-    else:
-        config = {"global_settings": {"cloudflare": {}}}
-    # Ensure all expected fields exist
-    default_cf = {
-        "enabled": False,
-        "autostart": False,
-        "subdomain": "",
-        "token_set": False,
-        "tunnel_name": "",
-        "tunnel_url": None
-    }
-    cloudflare = config.get('global_settings', {}).get('cloudflare', {})
-    for k, v in default_cf.items():
-        if k not in cloudflare:
-            cloudflare[k] = v
-    # Helper: get docker container
-    def get_cloudflared_container():
-        try:
-            client = docker.from_env()
-            for c in client.containers.list(all=True):
-                if 'cloudflared' in c.name:
-                    return c
-        except Exception as e:
-            print(f"Error accessing Docker: {e}")
-        return None
-    # Helper: get tunnel URL from log
-    def get_tunnel_url_from_log():
-        log_path = USER_DATA_PATH / "cloudflared.log"
-        if log_path.exists():
-            with open(log_path, 'r') as f:
-                for line in f:
-                    if "trycloudflare.com" in line:
-                        for word in line.split():
-                            if word.startswith("http") and "trycloudflare.com" in word:
-                                return word.strip()
-        return None
-    # POST: update settings and manage tunnel
-    if request.method == 'POST':
-        data = request.get_json(force=True, silent=True) or {}
-        cf = data.get('global_settings', {}).get('cloudflare', {})
-        # Update config fields
-        for k in default_cf.keys():
-            if k in cf:
-                cloudflare[k] = cf[k]
-        # Save config
-        config['global_settings']['cloudflare'] = cloudflare
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=2)
-        # Tunnel logic
-        msg = ''
-        container = get_cloudflared_container()
-        if cloudflare.get('enabled'):
-            if container:
-                if container.status != 'running':
-                    container.start()
-                    msg = 'Cloudflare Tunnel container started.'
-                else:
-                    msg = 'Cloudflare Tunnel container already running.'
-            else:
-                msg = 'Cloudflare Tunnel container not found. Please run docker-compose up.'
-        else:
-            if container and container.status == 'running':
-                container.stop()
-                msg = 'Cloudflare Tunnel container stopped.'
-            else:
-                msg = 'Cloudflare Tunnel container already stopped.'
-            cloudflare['tunnel_url'] = None
-        time.sleep(1)
-        url = get_tunnel_url_from_log()
-        if url:
-            cloudflare['tunnel_url'] = url
-        # Save config again with updated url
-        config['global_settings']['cloudflare'] = cloudflare
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=2)
-        return jsonify({"success": True, "message": msg, "settings": config})
-    # GET: return current settings and tunnel status
-    container = get_cloudflared_container()
-    url = get_tunnel_url_from_log()
-    if url:
-        cloudflare['tunnel_url'] = url
-    else:
-        cloudflare['tunnel_url'] = None
-    # Add runtime status
-    cloudflare['tunnel_running'] = bool(container and container.status == 'running')
-    cloudflare['cloudflare_tunnel_exists'] = bool(container)
-    config['global_settings']['cloudflare'] = cloudflare
-    return jsonify(config)
+        # Remove cloudflare section if it exists
+        if 'global_settings' in config and 'cloudflare' in config.get('global_settings', {}):
+            del config['global_settings']['cloudflare']
+        return jsonify(config)
+    
+    return jsonify({"global_settings": {}})
 
 # Debug print after app is defined
 print("\n>>> THIS IS THE app.py BEING RUN <<<\n")
