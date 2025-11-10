@@ -481,21 +481,343 @@ window.downloadConfig = function(filename) {
         })
         .catch(() => alert('Failed to download config.'));
 }
-// Unified view/edit config modal logic has been moved to configs.js
-// Config-related functionality has been moved to configs.js
-async function viewEditConfig(filename) {
-    console.warn('viewEditConfig has been moved to configs.js module');
-    // Import and use the function from configs.js instead
+// Unified view/edit config modal logic (mirroring pairlists)
+window.viewEditConfig = async function viewEditConfig(filename) {
+    configModalMode = 'view';
+    currentConfigFile = filename;
+    document.getElementById('viewEditConfigTitle').textContent = 'Configuration: ' + filename;
+    // Always set the config name field and make it readonly (like pairlists)
+    var nameField = document.getElementById('viewEditConfigName');
+    if (nameField) {
+        nameField.value = filename;
+        nameField.readOnly = true;
+    }
+    document.getElementById('viewEditConfigData').readOnly = true;
+    // Removed legacy global settings fields (visualStrategy, visualTimeframe, visualExchange, visualPairs)
+    // Hide Save/Cancel, show Edit
+    document.getElementById('saveConfigBtn').classList.add('d-none');
+    document.getElementById('cancelEditConfigBtn').classList.add('d-none');
+    document.getElementById('editConfigBtn').classList.remove('d-none');
+    // Hide validation messages
+    const configJsonValidationMsg = document.getElementById('configJsonValidationMsg');
+    if (configJsonValidationMsg) configJsonValidationMsg.style.display = 'none';
     try {
-        const configsModule = await import('./pages/configs.js');
-        if (configsModule.viewEditConfig) {
-            return configsModule.viewEditConfig(filename);
-        }
-    } catch (e) {
-        console.error('Failed to import configs.js:', e);
+        const resp = await fetch(`/api/config/${encodeURIComponent(filename)}`);
+        if (!resp.ok) throw new Error('Failed to load config');
+        const data = await resp.json();
+        resetConfigTabsAndFields('edit', data);
+    } catch (err) {
+        document.getElementById('viewEditConfigData').value = 'Error loading configuration: ' + err.message;
+    }
+    var modal = new bootstrap.Modal(document.getElementById('viewEditConfigModal'));
+    modal.show();
+}
+
+function enableConfigEditing() {
+    configModalMode = 'edit';
+    // Always keep config name readonly in edit mode (like pairlists)
+    var nameField = document.getElementById('viewEditConfigName');
+    if (nameField) {
+        nameField.readOnly = true;
+    }
+    document.getElementById('viewEditConfigData').readOnly = false;
+    document.getElementById('visualStrategy').readOnly = false;
+    document.getElementById('visualTimeframe').readOnly = false;
+    document.getElementById('visualExchange').readOnly = false;
+    document.getElementById('visualPairs').readOnly = false;
+    document.getElementById('saveConfigBtn').classList.remove('d-none');
+    document.getElementById('cancelEditConfigBtn').classList.remove('d-none');
+    document.getElementById('editConfigBtn').classList.add('d-none');
+}
+// --- Config Modal Visual/JSON Tab Logic ---
+// --- Configs Modal Logic ---
+let configModalMode = 'view'; // 'view', 'edit', 'create', 'upload'
+var currentConfigFile = null;
+
+
+function resetConfigTabsAndFields(mode, configObj) {
+    // Always show and activate the visual/json tabs
+    const visualTab = document.getElementById('visual-config-tab');
+    const jsonTab = document.getElementById('json-config-tab');
+    const visualContent = document.getElementById('visual-config-content');
+    const jsonContent = document.getElementById('json-config-content');
+    if (visualTab && jsonTab && visualContent && jsonContent) {
+        visualTab.classList.add('active');
+        jsonTab.classList.remove('active');
+        visualContent.classList.add('show', 'active');
+        jsonContent.classList.remove('show', 'active');
+    }
+    // Set fields
+    const categoryInput = document.getElementById('configCategory');
+    const categoryGroup = document.getElementById('configCategoryGroup');
+    if (mode === 'create') {
+        document.getElementById('mainConfigNameRow').style.display = 'none';
+        if (categoryInput) categoryInput.value = 'custom';
+        if (categoryGroup) categoryGroup.querySelectorAll('.category-select-btn').forEach(btn => btn.disabled = false);
+        if (categoryInput) categoryInput.disabled = false;
+        const defaultConfig = {};
+        document.getElementById('viewEditConfigData').value = JSON.stringify(defaultConfig, null, 2);
+        renderVisualConfigFields(defaultConfig);
+    } else if (mode === 'edit' && configObj) {
+        document.getElementById('mainConfigNameRow').style.display = '';
+        let configName = configObj.filename || configObj.name || (typeof currentConfigFile === 'string' ? currentConfigFile : '');
+        document.getElementById('viewEditConfigName').value = configName;
+        document.getElementById('viewEditConfigName').readOnly = true;
+        if (categoryInput) categoryInput.value = configObj.category || 'custom';
+        if (categoryGroup) categoryGroup.querySelectorAll('.category-select-btn').forEach(btn => btn.disabled = true);
+        if (categoryInput) categoryInput.disabled = true;
+        document.getElementById('viewEditConfigData').value = JSON.stringify(configObj, null, 2);
+        renderVisualConfigFields(configObj);
+    }
+    // Hide validation/duplication messages
+    const configJsonValidationMsg = document.getElementById('configJsonValidationMsg');
+    if (configJsonValidationMsg) configJsonValidationMsg.style.display = 'none';
+    const configNameDuplicateMsg = document.getElementById('configNameDuplicateMsg');
+    if (configNameDuplicateMsg) configNameDuplicateMsg.style.display = 'none';
+}
+
+// End of FreqTradeApp global assignment
+
+function createConfig() {
+    configModalMode = 'create';
+    currentConfigFile = null;
+    document.getElementById('viewEditConfigTitle').textContent = 'Create Configuration';
+    document.getElementById('viewEditConfigName').readOnly = false;
+    document.getElementById('viewEditConfigData').readOnly = false;
+    document.getElementById('visualStrategy').readOnly = false;
+    document.getElementById('visualTimeframe').readOnly = false;
+    document.getElementById('visualExchange').readOnly = false;
+    document.getElementById('visualPairs').readOnly = false;
+    document.getElementById('saveConfigBtn').classList.remove('d-none');
+    document.getElementById('cancelEditConfigBtn').classList.remove('d-none');
+    document.getElementById('editConfigBtn').classList.add('d-none');
+    resetConfigTabsAndFields('create');
+}
+
+async function editConfig(btn) {
+    configModalMode = 'edit';
+    const config = JSON.parse(btn.getAttribute('data-config'));
+    currentConfigFile = config.filename;
+    document.getElementById('viewEditConfigTitle').textContent = 'Edit Configuration';
+    document.getElementById('viewEditConfigName').readOnly = false;
+    document.getElementById('viewEditConfigData').readOnly = false;
+    document.getElementById('visualStrategy').readOnly = false;
+    document.getElementById('visualTimeframe').readOnly = false;
+    document.getElementById('visualExchange').readOnly = false;
+    document.getElementById('visualPairs').readOnly = false;
+    document.getElementById('saveConfigBtn').classList.remove('d-none');
+    document.getElementById('cancelEditConfigBtn').classList.remove('d-none');
+    document.getElementById('editConfigBtn').classList.add('d-none');
+    // Show loading state
+    document.getElementById('viewEditConfigData').value = 'Loading...';
+    try {
+        const resp = await fetch(`/api/config/${encodeURIComponent(config.filename)}`);
+        if (!resp.ok) throw new Error('Failed to load config');
+        const data = await resp.json();
+        // Set fields from loaded file
+        resetConfigTabsAndFields('edit', data);
+    } catch (err) {
+        document.getElementById('viewEditConfigData').value = 'Error loading configuration: ' + err.message;
     }
 }
-    // Config field handling moved to configs.js
+
+
+// --- Pairlist Upload & Conflict Validation Logic ---
+function uploadPairlist() {
+    const fileInput = document.getElementById('uploadPairlistFile');
+    if (!fileInput.files.length) {
+        showError('Please select a pairlist file to upload.');
+        return;
+    }
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        let json;
+        try {
+            json = JSON.parse(e.target.result);
+        } catch (err) {
+            showError('Invalid JSON: ' + err.message);
+            return;
+        }
+        // Validate structure: must be array or object with pair_whitelist
+        let pairs = [];
+        if (Array.isArray(json)) {
+            pairs = json;
+        } else if (json.pair_whitelist && Array.isArray(json.pair_whitelist)) {
+            pairs = json.pair_whitelist;
+        } else {
+            showError('Invalid pairlist structure. Must be an array or object with pair_whitelist.');
+            return;
+        }
+        // Check for fragmentation/nesting
+        if (pairs.some(p => Array.isArray(p) || typeof p === 'object')) {
+            showError('Pairlist contains nested arrays or objects. Only flat arrays of strings are allowed.');
+            return;
+        }
+        // Check for duplicates
+        const dupes = pairs.filter((v, i, a) => a.indexOf(v) !== i);
+        if (dupes.length > 0) {
+            showWarning('Duplicate pairs found: ' + [...new Set(dupes)].join(', '));
+        }
+        // Check for filename conflict (simulate by checking DOM or fetch)
+        const name = file.name;
+        let conflict = false;
+        try {
+            const resp = await fetch(`/api/pairlist/${encodeURIComponent(name)}`);
+            if (resp.ok) conflict = true;
+        } catch {}
+        if (conflict) {
+            showPairlistConflictModal(name, pairs);
+        } else {
+            saveUploadedPairlist(name, pairs);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function showPairlistConflictModal(name, pairs) {
+    // Create or reuse a modal for conflict resolution
+    let modal = document.getElementById('pairlistConflictModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'pairlistConflictModal';
+        modal.className = 'modal fade';
+        modal.tabIndex = -1;
+        modal.innerHTML = `
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Pairlist Conflict</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <p>A pairlist named <b>${name}</b> already exists. What would you like to do?</p>
+              <ul>
+                <li><b>Overwrite</b>: Replace the existing file.</li>
+                <li><b>Append Unique</b>: Add only new pairs (no duplicates).</li>
+                <li><b>Cancel</b>: Abort upload.</li>
+              </ul>
+            </div>
+            <div class="modal-footer">
+              <button id="overwritePairlistBtn" class="btn btn-danger">Overwrite</button>
+              <button id="appendPairlistBtn" class="btn btn-primary">Append Unique</button>
+              <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+          </div>
+        </div>`;
+        document.body.appendChild(modal);
+    }
+    // Attach event listeners
+    setTimeout(() => {
+        document.getElementById('overwritePairlistBtn').onclick = function() {
+            saveUploadedPairlist(name, pairs, true);
+            bootstrap.Modal.getInstance(modal).hide();
+        };
+        document.getElementById('appendPairlistBtn').onclick = async function() {
+            // Fetch existing, merge unique
+            let existing = [];
+            try {
+                const resp = await fetch(`/api/pairlist/${encodeURIComponent(name)}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (Array.isArray(data)) existing = data;
+                    else if (data.pair_whitelist) existing = data.pair_whitelist;
+                }
+            } catch {}
+            const merged = Array.from(new Set([...existing, ...pairs]));
+            saveUploadedPairlist(name, merged, true);
+            bootstrap.Modal.getInstance(modal).hide();
+        };
+    }, 300);
+    new bootstrap.Modal(modal).show();
+}
+
+async function saveUploadedPairlist(name, pairs, overwrite=false) {
+    try {
+        const resp = await fetch(`/api/pairlist/${encodeURIComponent(name)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pair_whitelist: pairs })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showSuccess(`Pairlist "${name}" uploaded${overwrite ? ' (overwritten)' : ''} successfully.`);
+            if (typeof refreshData === 'function') refreshData();
+        } else {
+            showError('Failed to upload pairlist: ' + (data.error || 'Unknown error'));
+        }
+    } catch (err) {
+        showError('Error uploading pairlist: ' + err.message);
+    }
+}
+
+// For legacy config upload, keep the old function (if needed)
+function uploadConfig() {
+    configModalMode = 'upload';
+    currentConfigFile = null;
+    document.getElementById('uploadConfigFile').value = '';
+    document.getElementById('uploadConfigSection').style.display = '';
+    document.getElementById('configEditorTabsContainer').style.display = 'none';
+    document.getElementById('mainConfigNameRow').style.display = 'none';
+    document.getElementById('mainConfigCategoryRow').style.display = 'none';
+    document.getElementById('validateConfigBtn').classList.add('d-none');
+    document.getElementById('saveConfigBtn').classList.add('d-none');
+    document.getElementById('uploadConfigBtn').classList.remove('d-none');
+    document.getElementById('viewEditConfigTitle').textContent = 'Upload Configuration';
+    var modal = new bootstrap.Modal(document.getElementById('viewEditConfigModal'));
+    modal.show();
+}
+
+// Optionally, attach uploadPairlist to a button:
+// document.getElementById('uploadPairlistBtn').onclick = uploadPairlist;
+
+window.cloneConfig = async function cloneConfig(filename) {
+    configModalMode = 'clone';
+    currentConfigFile = null;
+    document.getElementById('viewEditConfigTitle').textContent = 'Clone Configuration';
+    var nameField = document.getElementById('viewEditConfigName');
+    try {
+        const resp = await fetch(`/api/config/${encodeURIComponent(filename)}`);
+        if (!resp.ok) throw new Error('Failed to load config');
+        const config = await resp.json();
+        // Set the new name for the clone
+        let baseName = config.filename ? config.filename.replace(/(\.json)?$/, '') : (config.name || '');
+        const newName = baseName + '_copy.json';
+        if (nameField) {
+            nameField.value = newName;
+            nameField.readOnly = false;
+        }
+        // Set the category
+        var catField = document.getElementById('configCategory');
+        if (catField) catField.value = config.category || 'custom';
+        // Set the JSON editor
+        var dataField = document.getElementById('viewEditConfigData');
+        if (dataField) {
+            // Update the config object with the new name for the clone
+            let configClone = { ...config };
+            configClone.filename = newName;
+            configClone.name = newName;
+            dataField.value = JSON.stringify(configClone, null, 2);
+        }
+        // Set all visual fields if present
+    const configForClone = { ...config, filename: newName, name: newName };
+    renderVisualConfigFields(configForClone);
+    setVisualFieldsFromConfig(configForClone);
+    resetConfigTabsAndFields('create', configForClone);
+    } catch (err) {
+        var dataField = document.getElementById('viewEditConfigData');
+        if (dataField) dataField.value = 'Error loading configuration: ' + err.message;
+    }
+    var dataField = document.getElementById('viewEditConfigData');
+    if (dataField) dataField.readOnly = false;
+    var stratField = document.getElementById('visualStrategy');
+    if (stratField) stratField.readOnly = false;
+    var tfField = document.getElementById('visualTimeframe');
+    if (tfField) tfField.readOnly = false;
+    var exchField = document.getElementById('visualExchange');
+    if (exchField) exchField.readOnly = false;
+    var pairsField = document.getElementById('visualPairs');
+    if (pairsField) pairsField.readOnly = false;
     var saveBtn = document.getElementById('saveConfigBtn');
     if (saveBtn) saveBtn.classList.remove('d-none');
     var cancelBtn = document.getElementById('cancelEditConfigBtn');
@@ -507,6 +829,7 @@ async function viewEditConfig(filename) {
         var modal = new bootstrap.Modal(modalElem);
         modal.show();
     }
+}
 
 function cancelEditConfig() {
     if (configModalMode === 'edit' || configModalMode === 'clone') {
@@ -518,8 +841,52 @@ function cancelEditConfig() {
     }
 }
 // Patch saveConfig to restore button label after clone
-// Configuration functionality has been moved to configs.js
-
+window.saveConfig = async function() {
+    const name = document.getElementById('viewEditConfigName').value.trim();
+    let configText = document.getElementById('viewEditConfigData').value;
+    if (!name) {
+        showError('Please enter a configuration name');
+        return;
+    }
+    // If in visual mode, update JSON from visual settings first
+    const visualTab = document.getElementById('visual-config-tab');
+    if (visualTab && visualTab.classList.contains('active')) {
+        // Visual tab is active, sync JSON
+        if (typeof updateJSONFromVisual === 'function') updateJSONFromVisual();
+        configText = document.getElementById('viewEditConfigData').value;
+    }
+    let data;
+    try {
+        data = JSON.parse(configText);
+    } catch (error) {
+        showError('Invalid JSON format: ' + error.message);
+        return;
+    }
+    // Save to server (POST for new, PUT for edit)
+    let method = 'POST';
+    let url = '/api/configs';
+    if (configModalMode === 'edit') {
+        method = 'PUT';
+        url = `/api/config/${encodeURIComponent(name)}`;
+    }
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (result.success) {
+            showSuccess(`Configuration "${name}" saved successfully`);
+            bootstrap.Modal.getInstance(document.getElementById('viewEditConfigModal')).hide();
+            setTimeout(() => refreshConfigs(), 500);
+        } else {
+            showError('Failed to save configuration: ' + (result.error || 'Unknown error'));
+        }
+    } catch (error) {
+        showError('Error saving configuration: ' + error.message);
+    }
+}
 // FreqTrade Web Interface JavaScript
 
 // Global variables
@@ -775,7 +1142,57 @@ window.deleteConfig = async function(filename) {
         showError('Delete failed.');
     }
 };
-// Configuration table functionality has been moved to configs.js
+async function refreshConfigs() {
+    try {
+        showLoadingSpinner(document.getElementById('configsTableBody'));
+        const response = await fetchWithTimeout('/api/configs', {}, 10000);
+        if (!response.ok) throw new Error('Failed to fetch configs');
+        const data = await response.json();
+        renderConfigsTable(data.configs || []);
+        showSuccess('Configurations refreshed');
+    } catch (err) {
+        showError('Could not refresh configs: ' + err.message);
+    }
+}
+
+function renderConfigsTable(configs) {
+    const tbody = document.getElementById('configsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (!configs.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">No configuration files found</td></tr>';
+        return;
+    }
+    for (const config of configs) {
+    if (!config.category) config.category = 'Custom';
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-category', config.category.toLowerCase());
+        const color = getCategoryColor(config.category);
+        tr.innerHTML = `
+            <td>${config.name || ''}</td>
+            <td><span class="badge" style="background:${color};color:#fff;">${config.category.charAt(0).toUpperCase() + config.category.slice(1)}</span></td>
+            <td>${config.strategy || '-'}</td>
+            <td>${config.pair_count || '-'}</td>
+            <td>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-sm btn-light border text-primary d-flex align-items-center px-2 py-1" data-bs-toggle="modal" data-bs-target="#viewEditConfigModal" data-config='${JSON.stringify(config)}' onclick='editConfig(this)' title="View/Edit">
+                        <i class="fas fa-eye me-1"></i> View/Edit
+                    </button>
+                    <button class="btn btn-sm btn-light border text-success d-flex align-items-center px-2 py-1" title="Clone" onclick="cloneConfig(this)" data-config='${JSON.stringify(config)}' data-bs-toggle="modal" data-bs-target="#viewEditConfigModal">
+                        <i class="fas fa-clone me-1"></i> Clone
+                    </button>
+                    <button class="btn btn-sm btn-light border text-secondary d-flex align-items-center px-2 py-1" onclick="downloadConfig('${config.filename}')" title="Download">
+                        <i class="fas fa-download me-1"></i> Download
+                    </button>
+                    <button class="btn btn-sm btn-light border text-danger d-flex align-items-center px-2 py-1" onclick="deleteConfig('${config.filename}')" title="Delete">
+                        <i class="fas fa-trash me-1"></i> Delete
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    }
+}
 // ...existing code...
 // Remove stray bracket that caused syntax error
 
@@ -1009,7 +1426,6 @@ function validateJSON(jsonString) {
     }
 }
 
-// Configuration validation has been moved to configs.js
 function validateConfigurationFile(config) {
     const errors = [];
     const warnings = [];

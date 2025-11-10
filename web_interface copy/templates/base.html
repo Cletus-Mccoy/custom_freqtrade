@@ -157,17 +157,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <script type="module" src="{{ url_for('static', filename='js/components/page_header.js') }}"></script>
-    <script type="module" src="{{ url_for('static', filename='js/components/category_filters.js') }}"></script>
-    <script type="module" src="{{ url_for('static', filename='js/components/data_table.js') }}"></script>
     {% block scripts %}{% endblock %}
-    <script type="module">
-        import { PageHeader } from "{{ url_for('static', filename='js/components/page_header.js') }}";
-        import { CategoryFilters } from "{{ url_for('static', filename='js/components/category_filters.js') }}";
-        import { DataTable } from "{{ url_for('static', filename='js/components/data_table.js') }}";
-        window.PageHeader = PageHeader;
-        window.CategoryFilters = CategoryFilters;
-        window.DataTable = DataTable;
-    </script>
 </body>
 </html>

@@ -1,0 +1,19 @@
+/* 1MB whitespace between Cloudflare and API Key cards */
+#settingsModal .settings-whitespace-1mb {
+  min-height: 1048576px;
+}
+/* Custom modal scaling for settings modal */
+#settingsModal .modal-dialog {
+  height: auto !important;
+  max-height: none !important;
+}
+
+#settingsModal .modal-content {
+  height: auto !important;
+  max-height: none !important;
+}
+
+#settingsModal .modal-body {
+  overflow-y: visible !important;
+  max-height: none !important;
+}

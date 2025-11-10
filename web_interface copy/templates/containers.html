@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}Running Containers{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fab fa-docker text-primary"></i> Running Containers</h2>
+                <button type="button" class="btn btn-info" onclick="refreshContainers()">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> Container Status</h5>
+                </div>
+                <div class="card-body">
+                    {% if containers %}
+                        <div class="responsive-table-wrapper">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Container Name</th>
+                                            <th>Image</th>
+                                            <th>Status</th>
+                                            <th>Ports</th>
+                                            <th>Created</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for container in containers %}
+                                        <tr>
+                                            <td><strong>{{ container.name }}</strong></td>
+                                            <td><code>{{ container.image.tags[0] if container.image.tags else container.image.id[:12] }}</code></td>
+                                            <td>
+                                                {% if container.status == 'running' %}
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-play-circle"></i> Running
+                                                    </span>
+                                                {% elif container.status == 'exited' %}
+                                                    <span class="badge bg-danger">
+                                                        <i class="fas fa-stop-circle"></i> Stopped
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">
+                                                        <i class="fas fa-question-circle"></i> {{ container.status }}
+                                                    </span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if container.ports %}
+                                                    {% for port in container.ports %}
+                                                        {% if port %}
+                                                            <code>{{ port.get('PublicPort', '') }}:{{ port.get('PrivatePort', '') }}</code><br>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted">None</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ container.short_id }}</td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn main-action-btn btn-sm"
+                                                        data-status="{{ container.status }}"
+                                                        onclick="mainActionContainer(this, '{{ container.name }}')">
+                                                        {% if container.status == 'running' %}
+                                                            <span class="main-action-label"><i class="fas fa-play-circle"></i> Running</span>
+                                                            <span class="main-action-hover d-none"><i class="fas fa-redo"></i> Restart</span>
+                                                        {% else %}
+                                                            <span class="main-action-label"><i class="fas fa-stop-circle"></i> Stopped</span>
+                                                            <span class="main-action-hover d-none"><i class="fas fa-play"></i> Start</span>
+                                                        {% endif %}
+                                                    </button>
+                                                    <button class="btn btn-outline-info" onclick="viewContainer('{{ container.name }}')">
+                                                        <i class="fas fa-eye"></i> View
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary" onclick="cloneContainer('{{ container.name }}')">
+                                                        <i class="fas fa-copy"></i> Clone
+                                                    </button>
+                                                    <button class="btn btn-outline-danger" onclick="deleteContainer('{{ container.name }}')">
+                                                        <i class="fas fa-trash"></i> Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <!-- Responsive card list for mobile/tablet -->
+                        <div class="responsive-card-list d-none">
+                            {% for container in containers %}
+                            <div class="card mb-3 container-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div>
+                                            <h6 class="card-title mb-1">{{ container.name }}</h6>
+                                            <small class="text-muted">{{ container.image.tags[0] if container.image.tags else container.image.id[:12] }}</small><br>
+                                            <small class="text-muted">ID: {{ container.short_id }}</small>
+                                        </div>
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="#" onclick="cloneContainer('{{ container.name }}')">
+                                                    <i class="fas fa-copy"></i> Clone
+                                                </a></li>
+                                                <li><a class="dropdown-item text-danger" href="#" onclick="deleteContainer('{{ container.name }}')">
+                                                    <i class="fas fa-trash"></i> Delete
+                                                </a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="row g-2 mb-3">
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Status</small>
+                                            {% if container.status == 'running' %}
+                                                <span class="badge bg-success"><i class="fas fa-play-circle"></i> Running</span>
+                                            {% elif container.status == 'exited' %}
+                                                <span class="badge bg-danger"><i class="fas fa-stop-circle"></i> Stopped</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary"><i class="fas fa-question-circle"></i> {{ container.status }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted d-block">Ports</small>
+                                            {% if container.ports %}
+                                                {% for port in container.ports %}
+                                                    {% if port %}
+                                                        <span class="badge bg-info text-dark">{{ port.get('PublicPort', '') }}:{{ port.get('PrivatePort', '') }}</span><br>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% else %}
+                                                <span class="text-muted">None</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="d-grid gap-2 d-md-flex">
+                                        <button class="btn main-action-btn btn-sm flex-fill"
+                                            data-status="{{ container.status }}"
+                                            onclick="mainActionContainer(this, '{{ container.name }}')">
+                                            {% if container.status == 'running' %}
+                                                <span class="main-action-label"><i class="fas fa-play-circle"></i> Running</span>
+                                                <span class="main-action-hover d-none"><i class="fas fa-redo"></i> Restart</span>
+                                            {% else %}
+                                                <span class="main-action-label"><i class="fas fa-stop-circle"></i> Stopped</span>
+                                                <span class="main-action-hover d-none"><i class="fas fa-play"></i> Start</span>
+                                            {% endif %}
+                                        </button>
+                                        <button class="btn btn-info btn-sm flex-fill" onclick="viewContainer('{{ container.name }}')">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+<!-- View Container Modal -->
+<div class="modal fade" id="viewContainerModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewContainerModalTitle">Container Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs mb-3" id="viewContainerTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs-content" type="button" role="tab">Logs</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="env-tab" data-bs-toggle="tab" data-bs-target="#env-content" type="button" role="tab">Environment & Config</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="fs-tab" data-bs-toggle="tab" data-bs-target="#fs-content" type="button" role="tab">Filesystem</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="exec-tab" data-bs-toggle="tab" data-bs-target="#exec-content" type="button" role="tab">Exec</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="viewContainerTabContent">
+                    <div class="tab-pane fade show active" id="logs-content" role="tabpanel">
+                        <pre id="containerLogs" class="bg-dark text-light p-3" style="height: 300px; overflow-y: auto; font-size: 12px;">Logs will appear here...</pre>
+                    </div>
+                    <div class="tab-pane fade" id="env-content" role="tabpanel">
+                        <pre id="containerEnv" class="bg-light p-3" style="height: 300px; overflow-y: auto; font-size: 12px;">Environment & config will appear here...</pre>
+                    </div>
+                    <div class="tab-pane fade" id="fs-content" role="tabpanel">
+                        <pre id="containerFS" class="bg-light p-3" style="height: 300px; overflow-y: auto; font-size: 12px;">Filesystem will appear here...</pre>
+                    </div>
+                    <div class="tab-pane fade" id="exec-content" role="tabpanel">
+                        <pre id="containerExec" class="bg-light p-3" style="height: 300px; overflow-y: auto; font-size: 12px;">Exec output will appear here...</pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clone Container Modal -->
+<div class="modal fade" id="cloneContainerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Clone Container</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input id="cloneContainerName" class="form-control mb-2" placeholder="New Container Name">
+                <textarea id="cloneContainerConfig" class="form-control" rows="8" placeholder="Container config (JSON)"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveCloneContainer()">Clone</button>
+            </div>
+        </div>
+    </div>
+</div>
+                    {% else %}
+                        <div class="text-center text-muted">
+                            <i class="fab fa-docker fa-3x mb-3"></i>
+                            <h5>No containers found</h5>
+                            <p>No Docker containers are currently running. Start some services to see them here.</p>
+                            <a href="{{ url_for('services') }}" class="btn btn-primary">
+                                <i class="fas fa-cubes"></i> Manage Services
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Main action button hover logic (consolidated)
+document.addEventListener('DOMContentLoaded', function() {
+    function setMainActionBtnHover(btn) {
+        btn.addEventListener('mouseenter', function() {
+            btn.querySelector('.main-action-label').classList.add('d-none');
+            btn.querySelector('.main-action-hover').classList.remove('d-none');
+            if (btn.getAttribute('data-status') === 'running') {
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-warning');
+            } else {
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-success');
+            }
+        });
+        btn.addEventListener('mouseleave', function() {
+            btn.querySelector('.main-action-label').classList.remove('d-none');
+            btn.querySelector('.main-action-hover').classList.add('d-none');
+            if (btn.getAttribute('data-status') === 'running') {
+                btn.classList.remove('btn-warning');
+                btn.classList.add('btn-success');
+            } else {
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-secondary');
+            }
+        });
+        // Set initial color
+        if (btn.getAttribute('data-status') === 'running') {
+            btn.classList.add('btn-success');
+        } else {
+            btn.classList.add('btn-secondary');
+        }
+    }
+    document.querySelectorAll('.main-action-btn').forEach(setMainActionBtnHover);
+});
+
+function mainActionContainer(btn, name) {
+    var status = btn.getAttribute('data-status');
+    if (status === 'running') {
+        restartContainer(name);
+    } else {
+        startContainer(name);
+    }
+}
+function refreshContainers() {
+    location.reload();
+}
+
+function startContainer(name) {
+    alert('Start container: ' + name + '\n\nImplement backend call.');
+}
+function stopContainer(name) {
+    alert('Stop container: ' + name + '\n\nImplement backend call.');
+}
+function restartContainer(name) {
+    alert('Restart container: ' + name + '\n\nImplement backend call.');
+}
+function viewContainer(name) {
+    document.getElementById('viewContainerModalTitle').textContent = 'Container: ' + name;
+    // TODO: Load logs, env, fs, exec via AJAX
+    new bootstrap.Modal(document.getElementById('viewContainerModal')).show();
+}
+function cloneContainer(name) {
+    document.getElementById('cloneContainerName').value = name + '_copy';
+    document.getElementById('cloneContainerConfig').value = '// TODO: Load container config as JSON';
+    new bootstrap.Modal(document.getElementById('cloneContainerModal')).show();
+}
+function deleteContainer(name) {
+    if (confirm('Delete container: ' + name + '?')) {
+        alert('Delete container: ' + name + '\n\nImplement backend call.');
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,40 @@
+{
+  "pairlists": {
+    "categories": [
+      {
+        "name": "custom",
+        "color": "#198754"
+      },
+      {
+        "name": "freqai",
+        "color": "#0dcaf0"
+      },
+      {
+        "name": "example",
+        "color": "#ffc107"
+      },
+      {
+        "name": "test",
+        "color": "#c757d3"
+      },
+      {
+        "name": "azrazr",
+        "color": "#6c757d"
+      }
+    ],
+    "file_categories": {
+      "a.json": "azrazr",
+      "binance_all_futures.json": "example"
+    }
+  },
+  "global_settings": {
+    "cloudflare": {
+      "enabled": true,
+      "autostart": true,
+      "subdomain": "freqtrade.kadanskonsult.be",
+      "token_set": true,
+      "tunnel_name": "freqtrade",
+      "tunnel_url": null
+    }
+  }
+}

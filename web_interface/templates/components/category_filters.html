@@ -1,0 +1,36 @@
+{% macro render_category_filters(id_prefix="", show_settings=true) %}
+<div class="row mb-3 d-none d-lg-flex align-items-center">
+    <div class="col-md-8 col-sm-12 d-flex align-items-center">
+        {% if show_settings %}
+        <div class="btn-group btn-group-sm me-2 align-items-center" role="group">
+            <button class="btn btn-link p-0 category-filter-btn" 
+                    id="{{ id_prefix }}CategorySettingsBtn" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#{{ id_prefix }}CategorySettingsModal" 
+                    style="height: 100%; box-shadow: none; border: none;">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+        {% endif %}
+        <div id="{{ id_prefix }}CategoryFilterGroup" class="btn-group btn-group-sm" role="group">
+            <!-- Category filter buttons will be rendered here by JS -->
+        </div>
+    </div>
+</div>
+<!-- Mobile version -->
+<div class="row mb-3 d-lg-none align-items-center">
+    <div class="col-12 d-flex align-items-center">
+        {% if show_settings %}
+        <button class="btn btn-outline-secondary btn-sm me-2" 
+                id="{{ id_prefix }}CategorySettingsBtnMobile" 
+                data-bs-toggle="modal" 
+                data-bs-target="#{{ id_prefix }}CategorySettingsModal">
+            <i class="fas fa-cog"></i>
+        </button>
+        {% endif %}
+        <div id="{{ id_prefix }}CategoryFilterGroupMobile" class="btn-group btn-group-sm w-100" role="group">
+            <!-- Category filter buttons will be rendered here by JS -->
+        </div>
+    </div>
+</div>
+{% endmacro %}

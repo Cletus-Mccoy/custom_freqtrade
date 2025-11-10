@@ -228,12 +228,12 @@ The system will:
 
 ## 🔐 Security
 
-### Access Control (need to check)
+### Access Control
 - Basic session management
 - CSRF protection
 - Input sanitization
 
-### Production Deployment (need to check)
+### Production Deployment
 For production use:
 
 1. **Use a reverse proxy** (nginx, Apache)
@@ -297,6 +297,23 @@ user_data/
 ├── strategies/
 ├── config*.json
 └── ...
+```
+
+### Docker Compose Integration
+Add containers created through the web interface to your `docker-compose.yml`:
+
+```yaml
+services:
+  your_new_container:
+    image: freqtradeorg/freqtrade:stable
+    container_name: your_new_container
+    restart: unless-stopped
+    volumes:
+      - ./user_data:/freqtrade/user_data
+    command:
+      - trade
+      - --config
+      - /freqtrade/user_data/config_your_new_container.json
 ```
 
 ## 🔄 Updates

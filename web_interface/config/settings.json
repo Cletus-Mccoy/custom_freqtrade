@@ -1,7 +1,0 @@
-{
-  "cloudflare_tunnel_enabled": true,
-  "cloudflare_tunnel_url": null,
-  "cloudflare_tunnel_autostart": true,
-  "tunnel_running": null,
-  "cloudflare_tunnel_exists": false
-}

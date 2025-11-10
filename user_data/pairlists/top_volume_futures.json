@@ -15,6 +15,5 @@
         "UNI/USDT:USDT",
         "ATOM/USDT:USDT",
         "FTM/USDT:USDT"
-    ],
-    "pair_blacklist": []
+    ]
 }

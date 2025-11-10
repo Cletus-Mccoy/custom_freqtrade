@@ -33,15 +33,6 @@ SETTINGS_PATH = USER_DATA_PATH / "settings.json"
 app = Flask(__name__)
 app.secret_key = 'freqtrade_web_interface_2025'
 
-# Register custom Jinja2 filters
-def merge_filter(dict1, dict2):
-    """Merge two dictionaries in Jinja2 templates"""
-    result = dict1.copy()
-    result.update(dict2)
-    return result
-
-app.jinja_env.filters['merge'] = merge_filter
-
 # --- Cloudflared Token/Setup API (RESTORED, after app init) ---
 @app.route('/api/cloudflared/token', methods=['POST'])
 def cloudflared_token():
@@ -559,123 +550,6 @@ class FreqTradeManager:
         # Remove 'popular' legacy mapping
         else:
             return 'custom'
-
-    def get_pairlist_content(self, filename):
-        """Get the content of a specific pairlist file"""
-        try:
-            pairlist_path = self.pairlists_path / filename
-            if not pairlist_path.exists():
-                return None
-                
-            with open(pairlist_path, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error getting pairlist content {filename}: {e}")
-            return None
-
-    def update_pairlist_file(self, filename, data):
-        """Update or create a pairlist file"""
-        try:
-            pairlist_path = self.pairlists_path / filename
-            pairlist_data = {
-                'pair_whitelist': data.get('pairs', [])
-            }
-            
-            # Create pairlists directory if it doesn't exist
-            self.pairlists_path.mkdir(parents=True, exist_ok=True)
-            
-            with open(pairlist_path, 'w') as f:
-                json.dump(pairlist_data, f, indent=4)
-                
-            # Update category in user_config.json if provided
-            if 'category' in data:
-                self._update_pairlist_category(filename, data['category'])
-            
-            return True
-        except Exception as e:
-            print(f"Error updating pairlist file {filename}: {e}")
-            return False
-
-    def delete_pairlist_file(self, filename):
-        """Delete a pairlist file"""
-        try:
-            pairlist_path = self.pairlists_path / filename
-            if not pairlist_path.exists():
-                return False
-                
-            pairlist_path.unlink()
-            
-            # Remove from user_config.json categories if present
-            self._update_pairlist_category(filename, None)
-            
-            return True
-        except Exception as e:
-            print(f"Error deleting pairlist file {filename}: {e}")
-            return False
-
-    def clone_pairlist_file(self, filename, new_name):
-        """Clone a pairlist file"""
-        try:
-            source_path = self.pairlists_path / filename
-            if not source_path.exists():
-                return False
-
-            # Read source file
-            with open(source_path, 'r') as f:
-                pairlist_data = json.load(f)
-            
-            # Create new file
-            target_path = self.pairlists_path / new_name
-            with open(target_path, 'w') as f:
-                json.dump(pairlist_data, f, indent=4)
-            
-            # Copy category if exists
-            config_path = BASE_PATH / 'web_interface' / 'config' / 'user_config.json'
-            if config_path.exists():
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                pairlists_section = config.get('pairlists', {})
-                file_categories = pairlists_section.get('file_categories', {})
-                if filename in file_categories:
-                    self._update_pairlist_category(new_name, file_categories[filename])
-            
-            return True
-        except Exception as e:
-            print(f"Error cloning pairlist file {filename}: {e}")
-            return False
-
-    def _update_pairlist_category(self, filename, category):
-        """Update or remove pairlist category in user_config.json"""
-        try:
-            config_path = BASE_PATH / 'web_interface' / 'config' / 'user_config.json'
-            config = {}
-            
-            # Load existing config
-            if config_path.exists():
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-            
-            # Ensure pairlists section exists
-            if 'pairlists' not in config:
-                config['pairlists'] = {}
-            if 'file_categories' not in config['pairlists']:
-                config['pairlists']['file_categories'] = {}
-            
-            if category is None:
-                # Remove category
-                config['pairlists']['file_categories'].pop(filename, None)
-            else:
-                # Update category
-                config['pairlists']['file_categories'][filename] = category
-            
-            # Save config
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=4)
-            
-            return True
-        except Exception as e:
-            print(f"Error updating pairlist category: {e}")
-            return False
     
     def get_available_strategies(self):
         """Get all available strategy files"""
@@ -2581,20 +2455,9 @@ def services():
 @app.route('/pairlists')
 def pairlists():
     """Pairlist management page"""
-    try:
-        pairlists = manager.get_available_pairlists()
-        if not isinstance(pairlists, list):
-            pairlists = []
-        settings = load_settings()
-        for pairlist in pairlists:
-            pairlist['pairs_count'] = len(pairlist.get('pairs', [])) if isinstance(pairlist.get('pairs'), list) else 0
-            if 'category' not in pairlist:
-                pairlist['category'] = 'custom'
-        return render_template('pairlists.html', pairlists=pairlists, settings=settings)
-    except Exception as e:
-        print(f"Error in pairlists route: {str(e)}")
-        flash('Failed to load pairlists. Please check the server logs.', 'error')
-        return render_template('pairlists.html', pairlists=[], settings=load_settings())
+    pairlists = manager.get_available_pairlists()
+    settings = load_settings()
+    return render_template('pairlists.html', pairlists=pairlists, settings=settings)
 
 @app.route('/strategies')
 def strategies():
@@ -2686,77 +2549,16 @@ def api_get_pairlists():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/api/pairlist/<filename>', methods=['GET'])
-def get_pairlist_api(filename):
-    """Get a specific pairlist file"""
-    try:
-        pairlist = manager.get_pairlist_content(filename)
-        if not pairlist:
-            return jsonify({'error': 'Pairlist not found'}), 404
-        return jsonify(pairlist)
-    except Exception as e:
-        print(f"Error getting pairlist {filename}: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/pairlist/<filename>', methods=['PUT'])
-def update_pairlist_api(filename):
-    """Create or update a pairlist file"""
+def update_pairlist(filename):
+    """Create or update a pairlist file (overwrite or create new), and store category in user_config.json (new nested format)"""
     try:
+        pairlist_path = manager.pairlists_path / filename
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No data provided'}), 400
-            
-        # Get required fields
-        pairs = data.get('pairs', [])
-        if not isinstance(pairs, list):
-            return jsonify({'error': 'Pairs must be a list'}), 400
-            
-        # Extract optional fields
-        category = data.get('category', 'custom')
-        
-        # Update pairlist file
-        result = manager.update_pairlist_file(filename, {
-            'pairs': pairs,
-            'category': category
-        })
-        
-        if result:
-            return jsonify({'success': True})
-        else:
-            return jsonify({'error': 'Failed to update pairlist'}), 500
-    except Exception as e:
-        print(f"Error updating pairlist {filename}: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/pairlist/<filename>', methods=['DELETE'])
-def delete_pairlist_api(filename):
-    """Delete a pairlist file"""
-    try:
-        result = manager.delete_pairlist_file(filename)
-        if result:
-            return jsonify({'success': True})
-        else:
-            return jsonify({'error': 'Failed to delete pairlist'}), 500
-    except Exception as e:
-        print(f"Error deleting pairlist {filename}: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/pairlist/<filename>/clone', methods=['POST'])
-def clone_pairlist_api(filename):
-    """Clone a pairlist file"""
-    try:
-        new_name = request.args.get('new_name')
-        if not new_name:
-            return jsonify({'error': 'New name not provided'}), 400
-            
-        result = manager.clone_pairlist_file(filename, new_name)
-        if result:
-            return jsonify({'success': True})
-        else:
-            return jsonify({'error': 'Failed to clone pairlist'}), 500
-    except Exception as e:
-        print(f"Error cloning pairlist {filename}: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        # Extract category if present
+        category = data.pop('category', None)
         # Ensure directory exists
         pairlist_path.parent.mkdir(parents=True, exist_ok=True)
         with open(pairlist_path, 'w') as f:

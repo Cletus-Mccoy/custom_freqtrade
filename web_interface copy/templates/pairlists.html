@@ -1,14 +1,5 @@
 {% extends "base.html" %}
-{% from "components/page_header.html" import render_page_header %}
 {% block title %}Pairlists - FreqTrade Manager{% endblock %}
-
-{% block imports %}
-<script type="module" src="{{ url_for('static', filename='js/services/pairlist.service.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/components/pair-chips.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/components/pairlist-modal.js') }}"></script>
-<script type="module" src="{{ url_for('static', filename='js/pages/pairlists.js') }}"></script>
-{% endblock imports %}
-
 {% block content %}
 <!-- Move settings button into filter bar row (desktop) -->
 <!-- Pairlist Category Settings Modal -->
@@ -42,110 +33,140 @@
     <div class="row mb-4">
         <div class="col-12">
             <div class="card">
-                {{ render_page_header(
-                    title="Pairlist Management",
-                    icon="list",
-                    actions=[
-                        {
-                            "style": "primary",
-                            "class": "pairlist-action-btn",
-                            "icon": "sync",
-                            "text": "Reload Pairlists",
-                            "onclick": "refreshData()",
-                            "id": "reloadPairlistsBtn"
-                        },
-                        {
-                            "style": "success",
-                            "class": "pairlist-action-btn",
-                            "icon": "plus",
-                            "text": "Create New",
-                            "modal": "createPairlistModal"
-                        },
-                        {
-                            "style": "info",
-                            "class": "pairlist-action-btn",
-                            "icon": "upload",
-                            "text": "Upload New",
-                            "modal": "uploadPairlistModal"
-                        }
-                    ]
-                ) }}
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <h4 class="mb-0"><i class="fas fa-list"></i> Pairlist Management</h4>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-primary pairlist-action-btn" onclick="refreshData()">
+                            <i class="fas fa-sync"></i> Reload Pairlists
+                        </button>
+                        <button type="button" class="btn btn-outline-success pairlist-action-btn" data-bs-toggle="modal" data-bs-target="#createPairlistModal">
+                            <i class="fas fa-plus"></i> Create New
+                        </button>
+                        <button type="button" class="btn btn-outline-info pairlist-action-btn" data-bs-toggle="modal" data-bs-target="#uploadPairlistModal">
+                            <i class="fas fa-upload"></i> Upload New
+                        </button>
+                    </div>
+                </div>
                 <div class="card-body">
-                    {% from "components/category_filters.html" import render_category_filters %}
-                    {{ render_category_filters(id_prefix="pairlist") }}
-                    {% from "components/data_table.html" import render_data_table, render_action_buttons, render_badge, render_mobile_file_card %}
-                    {% call(view_mode) render_data_table(
-                        headers=["Name", "Category", "Pairs", "Filename", "Created", "Actions"],
-                        table_id="pairlistsTableBody",
-                        options={
-                            'category_enabled': true,
-                            'row_class': 'pairlist-row',
-                            'mobile_view': true,
-                            'breakpoint': 'xl'
-                        }
-                    ) %}
+                    <div class="row mb-3 d-none d-lg-flex align-items-center">
+                        <div class="col-md-8 col-sm-12 d-flex align-items-center">
+                            <div class="btn-group btn-group-sm me-2 align-items-center" role="group">
+                                <button class="btn btn-link p-0 category-filter-btn" id="openPairlistCategorySettingsBtn" data-bs-toggle="modal" data-bs-target="#pairlistCategorySettingsModal" style="height: 100%; box-shadow: none; border: none;">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
+                            <div id="categoryFilterGroup" class="btn-group btn-group-sm" role="group">
+                                <!-- Category filter buttons will be rendered here by JS -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3 d-lg-none align-items-center">
+                        <div class="col-12 d-flex align-items-center">
+                            <button class="btn btn-outline-secondary btn-sm me-2" id="openPairlistCategorySettingsBtn" data-bs-toggle="modal" data-bs-target="#pairlistCategorySettingsModal">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div id="categoryFilterGroupMobile" class="btn-group btn-group-sm w-100" role="group">
+                                <!-- Category filter buttons will be rendered here by JS -->
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Desktop view (hidden on small/medium screens, custom breakpoint) -->
+                    <div class="responsive-table-wrapper">
+                        <div class="table-responsive pairlist-table-responsive">
+                            <table class="table table-striped table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Category</th>
+                                        <th>Pairs</th>
+                                        <th>Filename</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pairlistsTableBody">
+                                    {% for pairlist in pairlists %}
+                                    <tr class="pairlist-row" data-category="{{ pairlist.category }}">
+                                        <td><strong>{{ pairlist.name }}</strong></td>
+                                        <td><span class="badge pairlist-category-badge" data-category="{{ pairlist.category }}" style="background-color: {{ pairlist.color|default('#6c757d') }}; color: #fff;">{{ pairlist.category|title if pairlist.category else 'Uncategorized' }}</span></td>
+                                        <td><span class="badge bg-primary">{{ pairlist.pairs_count }}</span></td>
+                                        <td><code>{{ pairlist.filename }}</code></td>
+                                        <td><small>{{ pairlist.created or 'Unknown' }}</small></td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-primary border-dark" onclick="viewEditPairlist('{{ pairlist.filename }}')" title="View/Edit">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-outline-success border-dark" onclick="copyPairlist('{{ pairlist.filename }}')" title="Clone">
+                                                    <i class="fas fa-copy"></i>
+                                                </button>
+                                                <button class="btn btn-outline-info border-dark" onclick="downloadPairlist('{{ pairlist.filename }}')" title="Download">
+                                                    <i class="fas fa-download"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger border-dark" onclick="deletePairlist('{{ pairlist.filename }}')" title="Delete">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- Mobile/Tablet view (visible below custom breakpoint) -->
+                    <div class="responsive-card-list d-none">
                         {% for pairlist in pairlists %}
-                            {% set actions = [
-                                {
-                                    'style': 'primary',
-                                    'icon': 'eye',
-                                    'onclick': 'viewEditPairlist(\'' ~ pairlist.filename ~ '\')',
-                                    'title': 'View/Edit'
-                                },
-                                {
-                                    'style': 'success',
-                                    'icon': 'copy',
-                                    'onclick': 'copyPairlist(\'' ~ pairlist.filename ~ '\')',
-                                    'title': 'Clone'
-                                },
-                                {
-                                    'style': 'info',
-                                    'icon': 'download',
-                                    'onclick': 'downloadPairlist(\'' ~ pairlist.filename ~ '\')',
-                                    'title': 'Download'
-                                },
-                                {
-                                    'style': 'danger',
-                                    'icon': 'trash',
-                                    'onclick': 'deletePairlist(\'' ~ pairlist.filename ~ '\')',
-                                    'title': 'Delete'
-                                }
-                            ] %}
-                            <tr class="pairlist-row" data-category="{{ pairlist.category if pairlist.category else 'custom' }}">
-                                <td><strong>{{ pairlist.name }}</strong></td>
-                                <td>{{ render_badge(pairlist.category|title if pairlist.category else 'Custom', 'secondary') }}</td>
-                                <td>{{ pairlist.pairs_count }}</td>
-                                <td>{{ pairlist.filename }}</td>
-                                <td>{{ pairlist.created|default('-') }}</td>
-                                <td>{{ render_action_buttons(actions) }}</td>
-                            </tr>
-                            {% if view_mode == 'mobile-file' %}
-                            <div class="card mb-3">
-                                <div class="card-body">
-                                    <h5 class="card-title">{{ pairlist.name }}</h5>
-                                    <div class="row g-2 mb-3">
-                                        <div class="col-6">
-                                            <small class="text-muted d-block">Category</small>
-                                            {{ render_badge(pairlist.category|title if pairlist.category else 'Custom', 'secondary') }}
-                                        </div>
-                                        <div class="col-6">
-                                            <small class="text-muted d-block">Pairs</small>
-                                            {{ render_badge(pairlist.pairs_count|string, 'primary') }}
-                                        </div>
-                                    </div>
-                                    <p class="card-text">
+                        <div class="card mb-3 pairlist-card" data-category="{{ pairlist.category }}">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="card-title mb-1">{{ pairlist.name }}</h6>
                                         <small class="text-muted">{{ pairlist.filename }}</small><br>
-                                        <small class="text-muted">Created: {{ pairlist.created|default('-') }}</small>
-                                    </p>
-                                    <div class="d-grid gap-2">
-                                        {{ render_action_buttons(actions, mobile=true) }}
+                                        <small class="text-muted">Created: {{ pairlist.created or 'Unknown' }}</small>
+                                    </div>
+                                    <div class="dropdown">
+                                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li><a class="dropdown-item" href="#" onclick="viewEditPairlist('{{ pairlist.filename }}')">
+                                                <i class="fas fa-eye"></i> View/Edit
+                                            </a></li>
+                                            <li><a class="dropdown-item" href="#" onclick="copyPairlist('{{ pairlist.filename }}')">
+                                                <i class="fas fa-copy"></i> Clone
+                                            </a></li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li><a class="dropdown-item text-danger" href="#" onclick="deletePairlist('{{ pairlist.filename }}')">
+                                                <i class="fas fa-trash"></i> Delete
+                                            </a></li>
+                                        </ul>
                                     </div>
                                 </div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Category</small>
+                                        <span class="badge pairlist-category-badge" data-category="{{ pairlist.category }}">{{ pairlist.category|title }}</span>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Pairs</small>
+                                        <span class="badge bg-primary">{{ pairlist.pairs_count }}</span>
+                                    </div>
+                                </div>
+                                <div class="d-grid gap-2 d-md-flex">
+                                    <button class="btn btn-primary btn-sm flex-fill border-dark" onclick="viewEditPairlist('{{ pairlist.filename }}')">
+                                        <i class="fas fa-eye"></i> View/Edit
+                                    </button>
+                                    <button class="btn btn-outline-success btn-sm flex-fill border-dark" onclick="copyPairlist('{{ pairlist.filename }}')">
+                                        <i class="fas fa-copy"></i> Clone
+                                    </button>
+                                </div>
                             </div>
-                            {% endif %}
+                        </div>
                         {% endfor %}
-                    {% endcall %}
-                        </td>
+                                        </div>
                     <style>
 /* Custom breakpoint for responsive switch (1200px) */
 @media (max-width: 1200px) {
@@ -189,11 +210,11 @@
                 </div>
                 <!-- Category selector moved above tabs -->
                 <div class="mb-2" id="pairlistCategoryEditRow">
-                    <label for="editCategorySelect" class="form-label">Category</label>
-                    <select id="editCategorySelect" class="form-select" required>
-                        <option value="custom">Custom</option>
-                        <!-- Additional options will be populated by JavaScript -->
-                    </select>
+                    <label class="form-label">Category</label>
+                    <div id="pairlistCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                        <!-- Category select buttons will be rendered here by JS -->
+                    </div>
+                    <input type="hidden" id="pairlistCategory" value="custom" required>
                 </div>
                 <ul class="nav nav-tabs mb-3" id="pairlistEditTabs" role="tablist">
                     <li class="nav-item" role="presentation">
@@ -239,11 +260,11 @@
             <div class="modal-body">
                 <input id="clonePairlistName" class="form-control mb-2" placeholder="New Pairlist Name">
                 <div class="mb-2">
-                    <label for="cloneCategorySelect" class="form-label">Category</label>
-                    <select id="cloneCategorySelect" class="form-select" required>
-                        <option value="custom">Custom</option>
-                        <!-- Additional options will be populated by JavaScript -->
-                    </select>
+                    <label class="form-label">Category</label>
+                    <div id="clonePairlistCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                        <!-- Category select buttons will be rendered here by JS -->
+                    </div>
+                    <input type="hidden" id="clonePairlistCategory" value="custom" required>
                 </div>
                 <textarea id="clonePairlistContent" class="form-control" rows="8"></textarea>
             </div>
@@ -274,7 +295,30 @@
     </div>
 </div>
 <script>
-// Category picker initialization is now handled by the modal component
+// Unified category picker logic for all modals
+function setupCategoryPicker(groupId, inputId, initialValue = 'custom') {
+    const group = document.getElementById(groupId);
+    const input = document.getElementById(inputId);
+    if (!group || !input) return;
+    group.querySelectorAll('.category-select-btn').forEach(btn => {
+        btn.onclick = function() {
+            group.querySelectorAll('.category-select-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            input.value = btn.getAttribute('data-value');
+        };
+    });
+    // Set initial value
+    let found = false;
+    group.querySelectorAll('.category-select-btn').forEach(btn => {
+        if (btn.getAttribute('data-value') === initialValue) {
+            btn.classList.add('active');
+            input.value = initialValue;
+            found = true;
+        }
+    });
+    if (!found && group.querySelector('.category-select-btn[data-value="custom"]')) {
+        group.querySelector('.category-select-btn[data-value="custom"]').classList.add('active');
+        input.value = 'custom';
     }
 }
 function closeModalById(id) {
@@ -349,11 +393,11 @@ function confirmDeletePairlist() {
                         <input type="text" class="form-control" id="pairlistName" required>
                     </div>
                     <div class="mb-3">
-                        <label for="categorySelect" class="form-label">Category</label>
-                        <select id="categorySelect" class="form-select" required>
-                            <option value="custom">Custom</option>
-                            <!-- Additional options will be populated by JavaScript -->
-                        </select>
+                        <label class="form-label">Category</label>
+                        <div id="createPairlistCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                            <!-- Category select buttons will be rendered here by JS -->
+                        </div>
+                        <input type="hidden" id="createPairlistCategory" value="custom" required>
                     </div>
                     <ul class="nav nav-tabs mb-3" id="createPairlistTabs" role="tablist">
                         <li class="nav-item" role="presentation">
@@ -400,11 +444,11 @@ function confirmDeletePairlist() {
                 <div class="upload-modal-inner">
                     <form id="uploadPairlistForm">
                         <div class="mb-3">
-                            <label for="uploadCategorySelect" class="form-label">Category</label>
-                            <select id="uploadCategorySelect" class="form-select" required>
-                                <option value="custom">Custom</option>
-                                <!-- Additional options will be populated by JavaScript -->
-                            </select>
+                            <label class="form-label">Category</label>
+                            <div id="uploadPairlistCategoryGroup" class="btn-group btn-group-sm w-100" role="group">
+                                <!-- Category select buttons will be rendered here by JS -->
+                            </div>
+                            <input type="hidden" id="uploadPairlistCategory" value="custom" required>
                         </div>
                         <div class="mb-3">
                             <label for="pairlistFile" class="form-label">Select JSON File</label>
@@ -420,11 +464,8 @@ function confirmDeletePairlist() {
         </div>
     </div>
 </div>
-
-{% endblock content %}
-
+{% endblock %}
 {% block scripts %}
-
 <script>
 // --- Create Pairlist Modal Logic ---
 let createPairlistPairs = [];
@@ -466,21 +507,13 @@ function syncCreateVisualEditorFromJson() {
 // ...existing code...
 </script>
 <style>
-    .category-filter-btn.active {
+    .category-filter-btn.active, .category-select-btn.active {
         box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
         outline: 2px solid #fff;
         font-weight: bold;
     }
-    .form-select {
-        background-color: #fff;
-        border: 1px solid #ced4da;
-        border-radius: 0.25rem;
-        transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
-    }
-    .form-select:focus {
-        border-color: #86b7fe;
-        outline: 0;
-        box-shadow: 0 0 0 0.25rem rgba(13,110,253,.25);
+    .category-select-btn.w-20 {
+        width: 20%;
     }
 </style>
 <script>
@@ -834,4 +867,4 @@ function deletePairlist(filename) {
     modal.show();
 }
 </script>
-{% endblock scripts%}
+{% endblock %}

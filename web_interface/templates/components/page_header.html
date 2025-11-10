@@ -1,0 +1,21 @@
+{% macro render_page_header(title, icon, actions=[]) %}
+<div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center">
+        <h4 class="mb-0"><i class="fas fa-{{ icon }}"></i> {{ title }}</h4>
+    </div>
+    {% if actions %}
+    <div class="btn-group btn-group-sm">
+        {% for action in actions %}
+        <button type="button" 
+                class="btn btn-outline-{{ action.style }} {{ action.class|default('') }}"
+                {% if action.modal %}data-bs-toggle="modal" data-bs-target="#{{ action.modal }}"{% endif %}
+                {% if action.onclick %}onclick="{{ action.onclick }}"{% endif %}
+                {% if action.id %}id="{{ action.id }}"{% endif %}
+                {% if action.title %}title="{{ action.title }}"{% endif %}>
+            <i class="fas fa-{{ action.icon }}"></i> {{ action.text }}
+        </button>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}

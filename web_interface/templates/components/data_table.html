@@ -1,0 +1,150 @@
+{% macro render_data_table(headers, table_id, options={}) %}
+{# Options can include:
+    category_enabled: bool (default: false)
+    responsive_class: string (default: table-responsive)
+    table_class: string (default: table table-striped table-hover align-middle)
+    row_class: string
+    row_data_attributes: list of attribute names to copy from items
+    mobile_view: bool (default: false)
+    service_view: bool (default: false)
+    breakpoint: string (default: lg)
+#}
+{% set opts = {
+    'category_enabled': false,
+    'responsive_class': 'table-responsive',
+    'table_class': 'table table-striped table-hover align-middle',
+    'row_class': '',
+    'row_data_attributes': [],
+    'mobile_view': false,
+    'service_view': false,
+    'breakpoint': 'lg'
+} | merge(options) %}
+
+<div class="responsive-table-wrapper d-none d-{{ opts.breakpoint }}-block">
+    <div class="{{ opts.responsive_class }}">
+        <table class="{{ opts.table_class }}">
+            <thead>
+                <tr>
+                    {% for header in headers %}
+                    <th>{{ header }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody id="{{ table_id }}">
+                {# Table content will be rendered here by JS or passed through caller #}
+                {% if caller %}
+                    {{ caller() }}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if opts.mobile_view %}
+<div class="d-{{ opts.breakpoint }}-none" id="{{ table_id }}_mobile">
+    {% if opts.service_view %}
+    {# Service-based mobile view with status indicators #}
+    <div class="service-cards">
+        {% if caller %}
+            {{ caller('mobile-service') }}
+        {% endif %}
+    </div>
+    {% else %}
+    {# File-based mobile view with standard card layout #}
+    <div class="responsive-card-list">
+        {% if caller %}
+            {{ caller('mobile-file') }}
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro render_action_buttons(actions, mobile=false) %}
+<div class="btn-group {% if mobile %}w-100{% else %}btn-group-sm{% endif %}">
+    {% for action in actions %}
+    <button class="btn btn-{% if mobile %}outline-{% endif %}{{ action.style|default('primary') }} {% if not mobile %}border-dark{% endif %} {% if mobile %}flex-fill{% endif %}"
+            {% if action.onclick %}onclick="{{ action.onclick }}"{% endif %}
+            {% if action.title %}title="{{ action.title }}"{% endif %}
+            {% if action.id %}id="{{ action.id }}"{% endif %}
+            {% if action.modal %}data-bs-toggle="modal" data-bs-target="#{{ action.modal }}"{% endif %}
+            {% if action.class %}class="{{ action.class }}"{% endif %}>
+        <i class="fas fa-{{ action.icon }}"></i>
+        {% if action.text or mobile %} {{ action.text|default(action.title) }}{% endif %}
+    </button>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro render_mobile_file_card(item, actions, category_enabled=false) %}
+<div class="card mb-3" {% if category_enabled %}data-category="{{ item.category }}"{% endif %}>
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+                <h6 class="card-title mb-1">{{ item.name }}</h6>
+                <small class="text-muted">{{ item.filename }}</small>
+                {% if item.created %}<br><small class="text-muted">Created: {{ item.created }}</small>{% endif %}
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    {% for action in actions %}
+                    <li>
+                        <a class="dropdown-item {% if action.style == 'danger' %}text-danger{% endif %}" 
+                           href="#" 
+                           onclick="{{ action.onclick }}">
+                            <i class="fas fa-{{ action.icon }}"></i> {{ action.text|default(action.title) }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% if caller %}{{ caller() }}{% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro render_mobile_service_card(service, actions=[]) %}
+<div class="card mb-3 service-card">
+    <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <h6 class="mb-0">{{ service.name }}</h6>
+        <span class="badge {% if service.status == 'running' %}bg-success{% else %}bg-danger{% endif %}">
+            {{ service.status }}
+        </span>
+    </div>
+    <div class="card-body">
+        {% if service.description %}
+        <p class="card-text small mb-2">{{ service.description }}</p>
+        {% endif %}
+        <div class="d-flex justify-content-between align-items-center">
+            <small class="text-muted">
+                {% if service.uptime %}Uptime: {{ service.uptime }}{% endif %}
+            </small>
+            {% if actions %}
+            <div class="btn-group btn-group-sm">
+                {% for action in actions %}
+                <button class="btn btn-{{ action.style|default('primary') }}"
+                        {% if action.onclick %}onclick="{{ action.onclick }}"{% endif %}
+                        {% if action.title %}title="{{ action.title }}"{% endif %}>
+                    <i class="fas fa-{{ action.icon }}"></i>
+                </button>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro render_badge(text, style="primary", data_attributes={}) %}
+<span class="badge bg-{{ style }}"
+    {% for key, value in data_attributes.items() %}
+    data-{{ key }}="{{ value }}"
+    {% endfor %}>
+    {{ text }}
+</span>
+{% endmacro %}
