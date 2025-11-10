@@ -2136,7 +2136,7 @@ git revert <commit-hash>
 **Date (UTC):** 2025-11-10 03:00  
 **Owner:** Copilot  
 **Scope:** `app.py` (~30-40 print statements in Docker service operations)
-**Commit:** `<TBD>`
+**Commit:** `98b8e9f`
 
 **Rationale:** Action A-3.10 created the logging infrastructure and replaced startup/initialization print statements with structured logging. However, approximately 30-40 print() statements remained in Docker service operations (start/stop/restart methods, lines ~1770-1925). These print statements needed to be converted to logger calls to complete the Stage A logging migration and provide consistent structured logging throughout the application.
 
